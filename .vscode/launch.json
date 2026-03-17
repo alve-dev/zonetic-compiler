@@ -18,7 +18,7 @@
             "name": "Python Debugger: Module",
             "type": "debugpy",
             "request": "launch",
-            "module": "akorn.main",
+            "module": "zonc.main",
             "env" : {
                 "PYTHONPATH" : "src"
             },

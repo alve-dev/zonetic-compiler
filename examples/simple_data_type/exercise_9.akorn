@@ -1,8 +1,0 @@
-// Ejercicio 9: Inversion con return anual
-
-let float amount_invest = readFloat("¿Cuanto quiere invertir en dolares?: ");
-let float annual_interest = readFloat("¿Con cuanto porcentaje de interes anual?: ");
-let int years_in_invest = readInt("Cuantos años durara la inversion?: ");
-let float money_gained = amount_invest * (annual_interest / 100 + 1) ** years_in_invest;
-
-writeline("El dinero ganado es:", money_gained);

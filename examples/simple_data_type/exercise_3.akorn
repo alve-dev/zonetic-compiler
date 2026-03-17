@@ -1,4 +1,0 @@
-//Ejercicio 3: Saludo dependiendo del nombre introducido
-
-let string name = readString("¿Cual es tu nombre?: ");
-writeline("¡Hola", name);

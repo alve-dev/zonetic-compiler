@@ -1,8 +1,0 @@
-// Ejercicio 11: Cuanta de ahorros
-
-let float actual_money = readFloat("¿Cuanto dinero depositas en la cuenta?: ");
-let float year_one = actual_money * 1.04;
-let float year_two = year_one * 1.04;
-let float year_three = year_two * 1.04;
-
-writeline("Primer año:", year_one, "\nSegundo año:", year_two, "\nTercer año:", year_three);

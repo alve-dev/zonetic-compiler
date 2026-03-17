@@ -1,7 +1,0 @@
-//Ejercicio 6: suma de numeros desde 1 a n, 1 + 2 + 3...+ n
-//sin bucles
-
-let int n = readInt("Digite el valor de n: ");
-let float suma = n * (n + 1) / 2;
-
-writeline(suma);

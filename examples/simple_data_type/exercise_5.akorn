@@ -1,6 +1,0 @@
-//Ejercicio 5: Calculo de salario la hora
-
-let int worked_hours = readInt("¿Cuantas horas son las trabajadas?: ");
-let int gained_hours = readInt("¿Cuanto ganas la hora?: ");
-
-writeline("Por", worked_hours, "horas trabajadas debes haber ganado", worked_hours * gained_hours);

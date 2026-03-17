@@ -1,7 +1,0 @@
-// Ejercicio 7: IMC(Indice de Masa Corporal)
-
-let float peso = readFloat("Tu peso en kg: ");
-let float estatura = readFloat("Tu estatura en metros: ");
-let float imc = peso / estatura ** 2;
-
-writeline("Tu indice de masa corporal es:", imc);

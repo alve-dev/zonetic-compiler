@@ -1,9 +1,0 @@
-// Ejercicio 10: Venta de juguetes
-
-let int clown_weight = 112, doll_weight = 75;
-
-let int clown_sold = readInt("¿Cuantos payasos se han vendido en el ultimo pedido?: ");
-let int doll_sold = readInt("¿Cuantas muñecas se han vendido en el ultimo pedido?: ");
-let int total_weight = (clown_sold * clown_weight) + (doll_sold * doll_weight);
-
-writeline("El peso total de todos los juguetes vendidos son:", total_weight);

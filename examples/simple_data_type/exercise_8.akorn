@@ -1,6 +1,0 @@
-// Ejercicio 8: Division mostrando el cociente y el resto
-
-let int n = readInt("Introduzca un numero: ");
-let int m = readInt("Introduzca otro numero: ");
-
-writeline(n, '/', m, '=', n / m, "resto", '=', n % m);

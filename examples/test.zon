@@ -1,0 +1,9 @@
+elif true {
+    mut x = 5
+}
+
+else {
+    mut y = 10
+}
+
+mut z: int = 5
