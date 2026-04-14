@@ -128,12 +128,12 @@ class DiagnosticRenderer:
         
         
     def format_note_and_zonny(self, msg_rendered: list[str], space_line: str, err_def, args: dict[str, str]):
-        msg_rendered.append(f"\n{space_line * " "} |\n")
+        msg_rendered.append(f"\n{space_line * ' '} |\n")
         if args is None:
-            msg_rendered.append(f"{space_line * " "} = note: {self.note_clean(err_def.note, space_line)}\n\n")
+            msg_rendered.append(f"{space_line * ' '} = note: {self.note_clean(err_def.note, space_line)}\n\n")
             msg_rendered.append(f"{err_def.zonny}")
         else:
-            msg_rendered.append(f"{space_line * " "} = note: {self.note_clean(err_def.note.format_map(args), space_line)}\n\n")
+            msg_rendered.append(f"{space_line * ' '} = note: {self.note_clean(err_def.note.format_map(args), space_line)}\n\n")
             msg_rendered.append(f"{err_def.zonny.format_map(args)}")
        
     
