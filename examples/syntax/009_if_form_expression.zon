@@ -1,0 +1,53 @@
+-| If Form as an Expression in Zonetic |-
+
+inmut age = readInt("Enter your age: ")
+
+inmut status_age = if age < 18 {
+    give "Minor"
+} elif age >= 18 and age < 40 {
+    give "Adult"
+} else {
+    give "Senior"
+}
+
+inmut status_cultivator = if age < 100 {
+    give "Mortal"
+} elif age < 300 {
+    give "Superior Disciple"
+} elif age < 600 {
+    give "Sect Master"
+} else {
+    give "Celestial Immortal"
+}
+
+print(status_age)
+print(status_cultivator)
+
+-|
+Naturally, an 'If' can be an expression thanks to how 'Block Expressions' work.
+The logic is the same as the 'If Form' seen in 008_if_elif_else.zon (I recommend 
+checking that out first).
+
+The program evaluates the 'condition fields' and executes the block that 
+returns 'true'. However, when used as an expression:
+1. The 'else' branch is ALWAYS mandatory (to ensure the variable always receives a value).
+2. All 'give' statements must return the same data type.
+3. 'give' breaks the control flow. If you place statements below a 'give', the 
+   compiler will issue a "dead code" warning; those lines will never execute.
+
+Difference between this and the previous example? 
+In this specific case, the output is the same. However, storing the result in a 
+variable allows you to reuse that logic later without re-evaluating the conditions. 
+It makes the code much cleaner in complex systems!
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon if_expression.zon
+Enter your age: 3000
+Senior
+Celestial Immortal
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

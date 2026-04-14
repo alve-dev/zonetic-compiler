@@ -1,0 +1,31 @@
+-| This is a comment |-
+
+-| Declaration Statement (without type annotations, using inference) |-
+inmut x  -| immutable, name: x, type: inferred, empty: yes |-
+mut y    -| mutable, name: y, type: inferred, empty: yes |-
+
+-| Declaration Statement (with type annotations) |-
+inmut i: int    -| immutable, name: i, type: int, empty: yes |-
+mut j: float    -| mutable, name: j, type: float, empty: yes |-
+
+-| Assignment Statement |-
+x = 10  -| x is now type: int, value: 10, empty: no |-
+-| x = 50 <-- Error: x is immutable and cannot be reassigned |-
+
+y = true  -| y is now type: bool, value: true, empty: no |-
+y = false -| Allowed: y is mutable and can change |-
+
+-| i = "hello" <-- Error: type mismatch, 'i' expects int |-
+-| j = 10      <-- Error: type mismatch, 'j' expects float |-
+
+-| Variable Usage Expression |-
+i = x  -| 'i' receives the value stored in 'x' (10), not a reference to 'x' |-
+
+-| Initialization Statement (Syntactic Sugar & Smart Shadowing) |-
+inmut x = x
+-|
+This statement combines declaration and assignment.
+The compiler evaluates the right-hand side first (the old value of 'x', which is 10).
+Then, it declares a new 'x' that shadows the previous one.
+Finally, it assigns the pre-calculated value to the new 'x'.
+|-

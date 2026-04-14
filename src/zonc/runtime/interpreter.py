@@ -1,4 +1,4 @@
-from zonc.ast import *
+from zonc.zonast import *
 from zonc.zonc_errors import DiagnosticEngine, ErrorCode
 from .runtime_scope import RuntimeScope, RuntimeValue, RuntimeFunc, RuntimeStruct
 from zonc.location_file import Span

@@ -1,4 +1,4 @@
-from zonc.ast import Node
+from zonc.zonast import Node
 from typing import Optional
 from .symbol import Symbol
 

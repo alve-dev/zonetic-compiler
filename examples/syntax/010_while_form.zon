@@ -1,0 +1,98 @@
+-| While Form in Zonetic |-
+
+mut counter = 1
+inmut number = readInt("Enter a number: ")
+print("\nMultiplication table of 10 (While Form):")
+
+while counter <= 10 {
+    print(number, '*', counter, '=', number * counter)
+    counter += 1
+}
+
+-|
+The 'While Form' requires a 'condition field', much like the 'If Form'.
+Instead of executing once, it runs its block repeatedly as long as the 
+condition field remains 'true'. Each iteration creates a scope, 
+executes the code, and destroys the scope upon finishing or interrupting.
+
+The 'While Form' allows two special statements within its block:
+
+1. 'break' keyword: Immediately halts execution. Like 'give', it breaks 
+   the flow, ignores any statements below it, and destroys the scope.
+2. 'continue' keyword: Skips the rest of the current block and jumps 
+   straight back to the condition check for the next iteration.
+
+In the example above, we create a multiplication table from 1 to 10.
+The condition 'counter <= 10' means the block will run while the 
+counter is 10 or less. Since 'counter' starts at 1, it executes, 
+and then we use 'counter += 1' to make the loop interactive and smart.
+
+Trace logic (input = 5):
+1. 'counter' is 1. Check: 1 <= 10 (true).
+2. Print: "5 * 1 = 5".
+3. 'counter' becomes 2.
+4. Scope is destroyed, jumps back to check: 2 <= 10 (true).
+...
+This continues until 'counter' is 11. Why 11? 
+If we used 'counter < 10', the loop would stop at 9 and we would never see 
+the result for 10. By using '<=', we ensure the 10th iteration happens.
+|-
+
+-| 
+There is another loop called the 'Infinity Form' using the 'infinity' keyword.
+What is this?
+
+It is a loop without a condition field; it always executes. To prevent it 
+from running forever (which is a bad idea in runtime), you must manually 
+place a stop using 'if' and 'break'.
+Internally, 'infinity' is syntactic sugar for 'while true'.
+|-
+
+print("\nMultiplication table of 10 (Infinity Form):")
+mut counter = 1 -| Shadowing the previous counter to restart at 1 |-
+
+infinity {
+    if counter > 10 {
+        break
+    }
+    print(number, '*', counter, '=', number * counter)
+    counter += 1
+}
+
+-| 
+Note: For now, 'while' is NOT an expression. 
+I might change this later if it proves to be stable. 
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon while_form.zon
+Enter a number: 5
+
+Multiplication table of 10 (While Form):
+5 * 1 = 5
+5 * 2 = 10
+5 * 3 = 15
+5 * 4 = 20
+5 * 5 = 25
+5 * 6 = 30
+5 * 7 = 35
+5 * 8 = 40
+5 * 9 = 45
+5 * 10 = 50
+
+Multiplication table of 10 (Infinity Form):
+5 * 1 = 5
+5 * 2 = 10
+5 * 3 = 15
+5 * 4 = 20
+5 * 5 = 25
+5 * 6 = 30
+5 * 7 = 35
+5 * 8 = 40
+5 * 9 = 45
+5 * 10 = 50
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

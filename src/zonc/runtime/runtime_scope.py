@@ -1,6 +1,6 @@
 from dataclasses import dataclass, replace
 from typing import Any
-from zonc.ast import BlockExpr, Param
+from zonc.zonast import BlockExpr, Param
 
 @dataclass
 class RuntimeValue:

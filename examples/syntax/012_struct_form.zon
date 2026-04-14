@@ -1,0 +1,80 @@
+-| Struct Form in Zonetic |-
+
+-|
+A 'Struct Form' is used to define custom data structures. It requires the 
+'struct' keyword, a name, and a block expression.
+
+Convention: For Struct names, I recommend using PascalCase (e.g., Point, SensorData).
+
+How does a Struct work?
+
+The Didactic Way:
+Think of it as a 'blueprint' of fields. You can reuse this blueprint globally 
+to create 'objects'. An object is just a clone of that blueprint that lives 
+inside a variable.
+
+The Honest Way:
+The compiler stores the fields defined in the block. When you create an object, 
+it clones those fields into a new local scope inside a variable.
+When you use 'object.field', Zonetic looks for that 'box' inside the object's 
+scope. If it doesn't exist or is used while empty, it's an error.
+
+Rules for Struct Blocks:
+- Only Declaration, Assignment, and Initialization statements are allowed.
+- Structs are 'pre-scanned' (global access regardless of declaration order).
+- Struct names have high priority: no shadowing with variables or functions.
+|-
+
+struct Point {
+    mut x: int
+    mut y: int
+    inmut z = 0
+    inmut id: int
+}
+
+-|
+Construct Expression:
+To create an object, use: NameStruct[initial_values].
+Passing values is OPTIONAL. You can do 'Point[]' to get an exact copy of the 
+blueprint. However, if a field is empty in the struct, you MUST initialize 
+it later before using it.
+
+Initialization of Empty Fields:
+Just like variables, an 'inmut' field that was declared empty (like 'id' above) 
+can be initialized ONCE from outside using a Field Assignment Statement.
+|-
+
+inmut myPoint = Point[] -| Creates a copy with empty x, y, and id |-
+
+-| Field Assignment Statement for initialization |-
+myPoint.id = 101       -| Legal: First assignment to an empty inmut field |-
+myPoint.x = 10         -| Legal: Initialization of empty field |-
+myPoint.y = 50         -| Legal: Initialization of empty field |-
+
+-|
+myPoint.id = 202       -| ERROR: 'id' is inmut and already initialized |-
+|-
+
+print("Sum: ", myPoint.x + myPoint.y)
+
+myPoint.x += 5         -| Legal: 'x' is mut |-
+print("Updated x: ", myPoint.x)
+
+-|
+Immutable Object vs. Immutable Field:
+
+1. 'inmut myPoint = ...': Makes the VARIABLE immutable. You cannot point 
+   'myPoint' to a different object later.
+2. Field mutability: Depends on the 'mut/inmut' keyword inside the Struct.
+   Even if the object variable is 'inmut', you can change its 'mut' fields.
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon struct_form.zon
+Sum: 60
+Updated x: 15
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

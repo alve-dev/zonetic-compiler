@@ -25,6 +25,7 @@ from .stmt.struct_form import StructForm
 from .stmt.assignment_field_stmt import AssignmentFieldStmt
 from .expr.field_expr import FieldExpr
 from .expr.construct_expr import ConstructExpr
+from .stmt.initialization_stmt import InitializationStmt
 
 __all__ = [
     "Node",
@@ -58,5 +59,6 @@ __all__ = [
     "StructForm",
     "FieldExpr",
     "AssignmentFieldStmt",
-    "ConstructExpr"
+    "ConstructExpr",
+    "InitializationStmt"
 ]

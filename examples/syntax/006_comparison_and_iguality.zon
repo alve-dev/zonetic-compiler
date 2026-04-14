@@ -1,0 +1,111 @@
+-| Equality Expressions |-
+
+-| Equal To Expression ('==') |-
+inmut equal = 5 == 5
+-|
+The 'equal to' expression checks if the right operand matches the left. 
+Returns 'true' if they match, 'false' otherwise.
+Operands must have matching types. Zonetic supports equality checks for 
+all valid native types.
+|-
+
+-| Not Equal To Expression ('!=') |-
+inmut not_equal = 5 != 5
+-|
+This is syntactic sugar for 'not(left == right)'. 
+It returns 'true' if the operands are different. 
+Example: 5 == 5 is true, therefore 5 != 5 is false because the 
+equality is reversed.
+|-
+
+-| Comparison Expressions |-
+
+-| Greater Than ('>') |-
+inmut greater = 5 > 10
+-|
+Takes 'int' or 'float' operands (must match). 
+Returns 'true' if the left operand is strictly greater than the right. 
+In this case: false, as 5 is not greater than 10.
+|-
+
+-| Less Than ('<') |-
+inmut less = 5 < 10
+-|
+The inverse of '>'. 
+5 < 10 is functionally equivalent to 10 > 5. 
+Use '<' when you want to check if the right operand is greater than the left.
+|-
+
+-| Greater Or Equal Than ('>=') |-
+inmut greater_or_equal = 5 >= 10
+-|
+Syntactic sugar for 'left > right or left == right'.
+Internally, Zonetic optimizes this using the logic: 'not(right > left)'.
+Let's verify: not(10 > 5) -> not(true) -> false. 
+It saves a tiny amount of memory/processing, which is the heart of high-performance computing.
+|-
+
+-| Less Or Equal Than ('<=') |-
+inmut less_or_equal = 5 <= 10
+-|
+Syntactic sugar for 'left < right or left == right'.
+Internally resolved as: 'not(left > right)'.
+Verification:
+(5 < 10) or (5 == 10) -> (true) or (false) -> true.
+not(5 > 10) -> not(false) -> true.
+Success!
+|-
+
+-| Precedence Hierarchy |-
+-|
+Updated precedence list (highest to lowest):
+
+1. Literals & Parentheses
+2. Power: '**'
+3. Unary: '-', '+', 'not', '!'
+4. Multiplicative: '*', '/', '%'
+5. Additive: '+', '-'
+6. Comparison: '>', '<', '>=', '<='
+7. Equality: '==', '!='
+8. Not: 'not', '!'
+9. And: 'and', '&&'
+10. Or: 'or', '||'
+|-
+
+inmut complex_op = not 5 + 3 * 2 == 11 or 10 > 5 and 8 <= 8
+-|
+Let's solve this complex operation step-by-step:
+1. Multiplicative: 3 * 2 = 6  -->  not 5 + 6 == 11 or 10 > 5 and 8 <= 8
+2. Additive: 5 + 6 = 11        -->  not 11 == 11 or 10 > 5 and 8 <= 8
+3. Comparisons: 10 > 5 (T), 8 <= 8 (T) -->  not 11 == 11 or true and true
+4. Equality: 11 == 11 (T)      -->  not true or true and true
+5. Unary Not: not true (F)     -->  false or true and true
+6. Logical And: true and true (T) -->  false or true
+7. Logical Or: false or true (T)  -->  Result: true
+
+Pro tip: Even though the language handles this, use parentheses '()' for 
+readability. They don't cost any performance!
+|-
+
+print("5 == 5:", equal)
+print("5 != 5:", not_equal)
+print("5 > 10:", greater)
+print("5 < 10:", less)
+print("5 >= 10:", greater_or_equal)
+print("5 <= 10:", less_or_equal)
+print("complex (should be true):", complex_op)
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon comparison_and_equality.zon
+5 == 5: true
+5 != 5: false
+5 > 10: false
+5 < 10: true
+5 >= 10: false
+5 <= 10: true
+complex (should be true): true
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

@@ -1,0 +1,106 @@
+-| Function Form in Zonetic |-
+
+-|
+The 'Function Form' in Zonetic is a specialized form that adds (and restricts) 
+certain functionalities within the language.
+
+A function form starts with the keyword 'func', followed by a valid identifier 
+(name), a list of parameters declared inside '()', an explicit return type 
+marked by '->', and finally, a block expression.
+
+Let's talk about identifiers (names) first, as I didn't detail them in variables. 
+An identifier is a sequence of characters used for naming things. 
+
+Technical and Mandatory Rules:
+- Only a-z (lowercase), A-Z (uppercase), 0-9 (digits), and '_' (underscore).
+- It CANNOT start with a digit (e.g., 1num -> Error; num1 -> Correct).
+
+Naming Conventions (Optional but Recommended):
+- Variable Names: Use snake_case (e.g., is_valid, status_age).
+- Function Names: Use camelCase (e.g., readInt(), calculateSum()).
+
+Now, Parameters:
+Parameters are declared similarly to variables but with one key difference:
+- Type annotation is mandatory (for better language safety).
+
+You can also provide default values (only simple literals or global variables).
+Examples:
+- func emptyParams() -> void
+- func oneParam(inmut x: int) -> void
+- func manyParams(inmut x: int, mut y: float = 0.0) -> void
+
+Important: Parameter mutability is local to the function. If you pass a 
+mutable variable to an 'inmut' parameter, that parameter remains immutable 
+inside the function scope.
+
+The 'Return' Statement:
+'return' works like 'give', but with a major difference:
+- 'give' exits a local block expression and yields a value.
+- 'return' exits the ENTIRE function immediately and yields a value to the caller.
+
+Every function must declare a return type. If a function returns nothing, 
+we use the special type '-> void'. For 'void' functions, 'return' is optional.
+|-
+
+func sumInt(inmut left: int, inmut right: int) -> int {
+    return left + right
+}
+
+-|
+How to use these functions? Through a 'Call Expression'.
+A call expression is an expression because it returns a value (except for 'void').
+
+Syntax: functionName(parameters...)
+
+Rules and Notes:
+- All parameters are mandatory unless they have a default value.
+- You can pass values by index (positional) or by keyparam (name=value).
+- Rule: Once you use a 'keyparam', all following parameters must also be keyparams.
+- Using a '-> void' function where a value is expected will cause an error.
+
+Examples:
+sumInt(5, 10)           -| Positional: left=5, right=10 |-
+sumInt(right=5, left=10) -| Keyparams: Order doesn't matter |-
+sumInt(5, right=10)     -| Mixed: Positional first, then keyparam (Allowed) |-
+|-
+
+-|
+Notice a pattern? print(), readInt(), etc., are all functions.
+The difference is that they are "Native Functions" (built into the compiler), 
+but they follow the same calling rules. For instance, print() is '-> void'.
+|-
+
+print(
+    sumInt(
+        left = readInt("Enter value for a: "),
+        right = readInt("Enter value for b: ")
+    )
+)
+
+-|
+The call above shows that you can nest functions and use newlines inside '()'.
+The compiler resolves the deepest part first (the readInts), then passes those 
+results to sumInt, and finally the sumInt result goes to print().
+
+Wait! While nesting is possible, it can be messy. For better readability, 
+I recommend this:
+
+inmut a = readInt("Enter value for a: ")
+inmut b = readInt("Enter value for b: ")
+inmut result = sumInt(a, b)
+
+print(result)
+
+Zonetic works step-by-step at high speed to make this happen. [ ~_0]
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon function_form.zon
+Enter value for a: 5
+Enter value for b: 37
+42
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

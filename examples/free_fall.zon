@@ -1,8 +1,0 @@
--| Definición de variables |-
-inmut h_inicial = readFloat("Altura inicial: ")
-inmut tiempo = readFloat("Tiempo de caida: ")
-inmut gravedad = 9.8
-
-inmut altura_actual = h_inicial - (0.5 * gravedad * (tiempo ** 2.0))
-
-print("A los", tiempo, "segundos, la altura es:", altura_actual, "metros")

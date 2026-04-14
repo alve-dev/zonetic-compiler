@@ -1,0 +1,22 @@
+-|
+ | Write a program that prints the numbers from 1 to 100 to the console 
+ | (using print, with a newline between each output), substituting 
+ | the following:
+ | - Multiples of 3 for the word "fizz".
+ | - Multiples of 5 for the word "buzz".
+ | - Multiples of both 3 and 5 for the word "fizzbuzz".
+ |-
+
+mut counter = 1
+while counter <= 100 {
+    if counter % 3 == 0 and counter % 5 == 0 {
+        print("fizzbuzz")
+    } elif counter % 3 == 0 {
+        print("fizz")
+    } elif counter % 5 == 0 {
+        print("buzz")
+    } else {
+        print(counter)
+    }
+    counter += 1
+}

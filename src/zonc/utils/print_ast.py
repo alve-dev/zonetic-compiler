@@ -1,4 +1,4 @@
-from zonc.ast import Node
+from zonc.zonast import Node
 from enum import Enum
 from zonc.location_file import Span
 

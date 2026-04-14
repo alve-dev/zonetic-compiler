@@ -1,7 +1,7 @@
 from .node_stmt import NodeStmt
 from ..param import Param
 from ..types import ZonType
-from zonc.ast import BlockExpr
+from zonc.zonast import BlockExpr
 from zonc.location_file import Span
 
 class FuncForm(NodeStmt):

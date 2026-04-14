@@ -1,5 +1,5 @@
 from zonc.scanner import *
-from zonc.ast import *
+from zonc.zonast import *
 from zonc.zonc_errors import DiagnosticEngine, ErrorCode
 from zonc.enviroment import Enviroment
 from zonc.location_file import Span, FileMap
@@ -123,6 +123,18 @@ class Parser:
         statements: list[Node] = []
         scope = Enviroment()
         
+        while not self.at_end():
+            if self.check(TokenType.KEYWORD_STRUCT):
+                self.advance()
+                if self.check(TokenType.LITERAL_IDENT):
+                    name = self.tokens._peek(self.position)
+                    self.LIST_TYPE.update({name._value : ZonType(self.type_enum, name._value)})
+                    self.type_enum += 1
+                    self.advance()
+                    
+            self.advance()
+        
+        self.position = 0
         while not self.at_end():
             if self.check(TokenType.SEMICOLON):
                 self.advance()
@@ -674,9 +686,6 @@ class Parser:
         
         block_expr = self._consume_block(scope, False, False)
         if isinstance(block_expr, ErrorNode): return block_expr
-        
-        self.LIST_TYPE.update({name._value : ZonType(self.type_enum, name._value)})
-        self.type_enum += 1
         
         return StructForm(
             name._value,

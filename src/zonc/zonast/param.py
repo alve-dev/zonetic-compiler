@@ -1,4 +1,4 @@
-from zonc.ast import ZonType
+from zonc.zonast import ZonType
 from .expr.node_expr import NodeExpr
 from zonc.location_file import Span
 

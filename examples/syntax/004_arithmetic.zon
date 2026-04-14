@@ -1,0 +1,94 @@
+-| Arithmetic in Zonetic |-
+
+-|
+Here I will explain the syntax for Arithmetic in Zonetic.
+If you already know how to program, you will notice the operators are standard.
+If you are new to this, get ready to learn how the language "thinks"!
+|-
+
+-| Addition Expression ('+') |-
+inmut sum = 10 + 10
+-|
+Adds two operands: left and right. 
+In Zonetic, operands must have matching types (e.g., int + int). 
+When multiple '+' operators are used, they resolve from left to right (Left-Associativity):
+
+10 + 10 + 10 + 10  -->  (((10 + 10) + 10) + 10)
+
+The compiler solves the innermost parentheses first for maximum precision. 
+Warning: '10 + 10 + 10.0' will cause an error because the last operation 
+would be '20 (int) + 10.0 (float)', and types must match exactly.
+|-
+
+-| Subtraction Expression ('-') |-
+inmut sub = 10 - 10  -| Subtracts right from left |-
+
+-| Multiplication Expression ('*') |-
+inmut mult = 10 * 10 -| Multiplies two operands |-
+
+-| Division Expression ('/') |-
+inmut div = 10 / 10  -| Dividing by zero is a runtime error, just like in math |-
+
+-| Modulo Expression ('%') |-
+inmut mod = 10 % 10  -| Returns the remainder of the division. Right operand cannot be 0 |-
+
+-| Power Expression ('**') |-
+inmut p_val = 2 ** 2 ** 3
+-| 
+Exponention uses Right-Associativity (resolves from right to left), matching standard math:
+2 ** 2 ** 3  -->  (2 ** (2 ** 3))  -->  (2 ** 8)  -->  256
+|-
+
+-| Unary Operators ('+' | '-') |-
+inmut negative = -10 -| Reverses the sign: result is -10 |-
+inmut positive = +10 -| Returns the value as is. Functionally redundant but allowed |-
+-|
+Note on nested unaries: Zonetic uses simple logic for sequences like '----10'.
+If the count of '-' is even, the number is positive (10). 
+If odd, the number is negative (-10). 
+While you can use parentheses like '-(-(10))', they are not required.
+|-
+
+-| Operator Precedence in Zonetic |-
+-|
+Precedence determines the order of operations. Zonetic follows the standard 
+mathematical hierarchy (highest priority first):
+
+1. Literals & Parentheses: 20, 3.14, "hi", true, (expression)
+2. Power: '**'
+3. Unary: '-' | '+'
+4. Multiplicative: '*', '/', '%'
+5. Additive: '+', '-'
+
+Manual Example: 20 * 10 - 5 ** 3
+((20 * 10) - (5 ** 3))  -->  5 ** 3 is 125
+(200 - 125)             -->  Result: 75
+|-
+
+print("10 + 10:", sum)
+print("10 - 10:", sub)
+print("10 * 10:", mult)
+print("10 / 10:", div)
+print("10 % 10:", mod)
+print("2 ** 2 ** 3:", p_val)
+print("20 * 10 - 5 ** 3:", 20 * 10 - 5 ** 3)
+-|
+Since these are expressions, they don't need to be stored in variables to be printed.
+The compiler resolves the expression first, converts the result to a string, 
+and 'print()' appends the newline.
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon arithmetic.zon
+10 + 10: 20
+10 - 10: 0
+10 * 10: 100
+10 / 10: 1
+10 % 10: 0
+2 ** 2 ** 3: 256
+20 * 10 - 5 ** 3: 75
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

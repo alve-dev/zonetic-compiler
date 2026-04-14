@@ -1,0 +1,121 @@
+-| If Form in Zonetic |-
+-|
+This might be controversial, since the standard if-else if-else is typically 
+regarded as a "conditional structure" where if a condition is true, its block 
+executes and the rest are ignored.
+
+I came up with the "Form" concept—I'm not sure if it already exists, and it 
+might seem arrogant to "reinvent the wheel," but I did this solely to improve 
+the learning process. It is strictly a pedagogical concept. 
+
+Questions:
+If there is already so much teaching for the standard way, why will "Form" 
+improve learning? Only as a way of explaining.
+Is it fundamental to read this to understand Zonetic? No, this is only if 
+you are a novice or curious about how I explain it. An 'if' works the same 
+as in C++, Python, etc.
+
+Recommendation from me, the developer:
+If you are a Senior, don't criticize; just don't read this.
+If you are a novice, read it if you want; otherwise, you can check the 
+Rust explanation, which is similar, except 'give' is what returns the value.
+
+Now, for those staying, let's get to it!! [ ^_^]
+|-
+
+-| The "Form" Concept |-
+-| A 'Form' is simply a Zonetic native construct that modifies the behavior 
+of a Block Expression in different ways. |-
+
+-| If Form |-
+-|
+An 'If Form' is a form that works in branches. Master these three keywords 
+ and you become a master:
+
+'if'   -> Starts an If Form; requires a 'condition field'.
+'elif' -> Extends the If Form into another branch (infinitely, though I 
+          don't recommend hundreds). Requires a 'condition field'.
+'else' -> This is optional (in some cases mandatory) and does NOT 
+          need a condition field. It is the exception.
+
+Let's look at an example.
+|-
+
+inmut age = readInt("Enter your age: ")
+
+if age < 18 {
+    print("Minor")
+} elif age >= 18 and age < 40 {
+    print("Adult")
+} else {
+    print("Senior")
+}
+
+-| A nod to Xianxia cultivation ranks [ ~_0] |-
+if age < 100 {
+    print("Mortal")
+} elif age < 300 {
+    print("Superior Disciple")
+} elif age < 600 {
+    print("Sect Master")
+} else {
+    print("Celestial Immortal")
+}
+
+-|
+Now, what is happening?
+First, the program finds an Initialization Statement. It evaluates the 
+expression first (the readInt). Let's say I input 225; the variable 'age' 
+is created and assigned the value 225.
+
+Then it reaches an 'If Form' with 3 branches.
+
+'if age < 18 {'
+    ^^^^^^^^-- This is the 'condition field'. It must always contain a 'bool'. 
+               As you know, '<' returns a bool, so we are good.
+
+The language checks the condition fields of each branch in the If Form. 
+If one is true, its Block Expression executes. If it's false and there 
+are 'elif's, it checks the others. If none are true and there is an 'else', 
+its block executes no matter what. If there is no 'else', nothing happens 
+and it moves on.
+
+Let's trace it by hand:
+if age < 18 { ... }
+elif age >= 18 and age < 40 { ... }
+else { ... }
+
+It reaches the start (if) and checks: age(225) < 18 -> false. It ignores 
+that block and moves to the next.
+It reaches 'elif': age(225) >= 18 and age(225) < 40 -> true and false -> false. 
+It does not execute.
+It reaches 'else', which executes immediately. It enters the Block Expression, 
+creates a scope, runs its statements, and exits. 
+(You could use 'give', but if it's not to return a value, it's unnecessary).
+It prints "Senior".
+
+The language keeps moving down and sees ANOTHER If Form. This is why 'elif' 
+exists: 'elif' extends the form. Another 'if' is a completely different form.
+
+if age < 100 { ... }
+elif age < 300 { ... }
+elif age < 600 { ... }
+else { ... }
+
+First check: age(225) < 100 -> false. Jumps to the next check.
+age(225) < 300 -> true. What happens here is the block executes, but 
+once it finishes, the program doesn't keep checking. 
+It exits the entire If Form. This is "short-circuiting," just like in 
+'and' and 'or' operations.
+|-
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon if_form.zon
+Enter your age: 225
+Senior
+Superior Disciple
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

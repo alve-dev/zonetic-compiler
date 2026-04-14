@@ -1,0 +1,41 @@
+-|
+If you checked '001_print.zon', you know that I will explain functions later.
+What I am introducing now are the built-in input functions.
+
+If you are a programmer, you likely already know what a function is. 
+If you are new but have read the Zonetic docs, you are safe.
+If you are new and haven't read the docs yet, don't worry for now.
+
+Just like with 'print()', I am introducing these functions now so that 
+upcoming syntax examples can be more interactive.
+To learn more about functions right now, visit:
+https://github.com/alve-dev/zonetic-official-docs/blob/main/docs/zonetic_docs/forms/function_form_doc.md
+|-
+
+inmut age = readInt("Enter your age: ")
+-|
+This function takes a 'prompt' (which must be a string). 
+Just like 'print()', it displays the prompt in the terminal and waits for user input.
+'readInt()' specifically expects an integer like 0, 10, or 293475.
+If the input is valid, it is stored in the variable 'age'.
+Note: The prompt also includes an automatic newline at the end.
+|-
+
+inmut height = readFloat("Enter your height: ")  -| 'readFloat()' returns a float |-
+inmut name = readString("Enter your name: ")     -| 'readString()' returns a string |-
+
+print("Hi, I am", name, "I am", age, "years old and I am", height, "meters tall.")
+
+-|
+Zonetic Simulated Terminal:
+
+---
+>> zon r presentation.zon
+Enter your age: 25
+Enter your height: 1.65
+Enter your name: Sasha
+Hi, I am Sasha I am 25 years old and I am 1.65 meters tall.
+---
+Simulation finished. Don't forget to test this in a .zon file yourself!
+I have verified this by running the code in the compiler. Bye! [ ^_^]b
+|-

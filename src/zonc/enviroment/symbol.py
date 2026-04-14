@@ -1,6 +1,6 @@
-from zonc.ast import ZonType
+from zonc.zonast import ZonType
 from zonc.location_file import Span
-from zonc.ast import Param
+from zonc.zonast import Param
 
 class Symbol:
     def __init__(

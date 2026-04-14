@@ -22,7 +22,7 @@
             "env" : {
                 "PYTHONPATH" : "src"
             },
-            "args" : ["akorn", "repl", "--debug"],
+            "args" : ["setpath", "programacion/zonetic", "--debug"],
         }
     ]
 }

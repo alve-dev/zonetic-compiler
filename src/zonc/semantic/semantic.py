@@ -1,4 +1,4 @@
-from zonc.ast import *
+from zonc.zonast import *
 from zonc.zonc_errors import DiagnosticEngine
 from zonc.enviroment import *
 from zonc.zonc_errors import ErrorCode
@@ -148,7 +148,7 @@ class Semantic:
                             if not(symbol is None) and is_empty:
                                 sym_empty_count.dict_temp.update({stmt.name : [1, symbol.decl_span]})
                     
-                    symbol.is_empty = True
+                                symbol.is_empty = True
             
             elif isinstance(stmt, BlockExpr):
                 block_flow = self.evaluate_statements(stmt.stmts, stmt.scope, span_block=stmt.span, is_expr=False)
@@ -395,15 +395,15 @@ class Semantic:
         func_symbol: FuncSymbol = scope.get_symbol(node.name)
         there_is_error = False
         
+        if func_symbol is None or isinstance(func_symbol, Symbol):
+            self.diag.emit(ErrorCode.E3020, { "name" : node.name }, [node.span], [(node.span, "cannot call `{name}` because it has not been defined")])
+            if not there_is_error: there_is_error = True
+            return
+        
         if func_symbol.is_native and func_symbol.is_varidic:
             if not node.params is None:
                 for expr in node.params:
                     self.infer_expr(expr, scope)
-            return
-        
-        if func_symbol is None or isinstance(func_symbol, Symbol):
-            self.diag.emit(ErrorCode.E3020, { "name" : node.name }, [node.span], [(node.span, "cannot call `{name}` because it has not been defined")])
-            if not there_is_error: there_is_error = True
             return
         
         func_params = {}

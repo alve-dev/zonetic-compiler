@@ -1,44 +1,61 @@
-from sys import argv
-from .repl import repl
-from .cmd_zonc import cmd_akorn_run, cmd_akorn_version, cmd_akorn_help
+import sys
+from .cmd_zonc import cmd_zon_run, cmd_zon_version, cmd_zon_help, cmd_zon_set_path, cmd_zon_show_path, cmd_zon_clear_path
+from .cmd_zonc import cmd_zon_set_file
 
 def run_cli():
-    if len(argv) < 2 or argv[1] != "akorn":
-        print("Usage: akorn [commands]")
+    args = sys.argv[1:]
+    if len(args) == 0:
+        print("[zon error]: No command or file specified.")
+        print("-- The forge is idle. Use zon help to learn the commands and start building.")
         return
     
-    args = argv[2:]
+    if args[0] == "r":
+        if len(args) < 2:
+            print("[zon error]: No file specified for the run command.")
+            print("-- The engine needs a target. Use zon r <filename>.zon to start execution.")
+            return
+        
+        cmd_zon_run(args[1])
     
-    if args[0] == "run":
-        try:
-            cmd_akorn_run(args[1])
-        except IndexError:
-            print("Usage: akorn run [rute script akon]")
-            
-    elif args[0] == "token":
-        try:
-            cmd_akorn_run(args[1], "token")
-        except IndexError:
-            print("Usage: akorn token [rute script akon]")
-
-    elif args[0] == "ast":
-        try:
-            cmd_akorn_run(args[1], "ast")
-        except IndexError:
-            print("Usage: akorn ast [rute script akon]")
-            
-    elif args[0] == "version":
-        cmd_akorn_version()
+    elif args[0] == "vers":
+        cmd_zon_version()
         
     elif args[0] == "help":
-        cmd_akorn_help()
+        params = args[1:]
+        if len(params) > 0:
+            cmd_zon_help(params[0])
+            return
+        
+        cmd_zon_help()
+        return
     
+    elif args[0] == "setpath":
+        path = args[1:]
+        if len(path) < 1:
+            print("[zon error]: No path provided for setpath.")
+            print("-- Usage: zon setpath /path/to/your/scripts")
+            return
+        
+        cmd_zon_set_path(path[0])
+        
+    elif args[0] == "showpath":
+        cmd_zon_show_path()
+        
+    elif args[0] == "clrpath":
+        cmd_zon_clear_path()
+        
+    elif args[0] == "setfile":
+        path = args[1:]
+        if len(path) < 1:
+            print("[zon error]: No path or filename specified.")
+            print("-- Usage: zon setfile path/to/folder/script.zon")
+            return
+        
+        cmd_zon_set_file(path[0])
+        
     elif args[0] == "repl":
-        repl()
-    
-# run = correr el archivo en el interprete
-# tokens = correr hasta conseguir lista de tokens y mostarlas
-# ast = correr hasta conseguir nodos y ponerlos
-# version = mostrar la version en la que esta el lenguaje
-# exit = salir de repl
-# help muestra comandos de akon-cli
+        cmd_zon_set_file(mode=1)
+        
+    else:
+        print("[zon error]: Unknown command.")
+        print("-- The forge doesn't recognize that instruction. Use zon help to see the available commands.")

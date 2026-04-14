@@ -1,0 +1,52 @@
+-|
+ | Crea una única función (importante que sólo sea una) que sea capaz
+ | de calcular y retornar el área de un polígono.
+ | - La función recibirá por parámetro sólo UN polígono a la vez.
+ | - Los polígonos soportados serán Triángulo, Cuadrado y Rectángulo.
+ | - Imprime el cálculo del área de un polígono de cada tipo.
+ |-
+
+-| main program |-
+inmut triangle = Polygon[
+    type = "tri",
+    val_1 = 10.0,
+    val_2 = 5.0
+]
+
+inmut rectangle = Polygon[
+    type = "rect",
+    val_1 = 5.0,
+    val_2 = 7.0
+]
+
+inmut square = Polygon[
+    type = "squ",
+    val_1 = 4.0
+]
+
+print("El area del triangulo es", calculateArea(triangle))
+print("El area del rectangulo es", calculateArea(rectangle))
+print("El area del cuadrado es", calculateArea(square))
+
+
+-| functions and structs |-
+func calculateArea(inmut polygon: Polygon) -> float {
+    if polygon.type == "tri" {
+        return (polygon.val_1 * polygon.val_2) / 2.0
+
+    } elif polygon.type == "rect" {
+        return polygon.val_1 * polygon.val_2
+
+    } elif polygon.type == "squ" {
+        return polygon.val_1 * polygon.val_1
+
+    } else {
+        return -1.0 -| -1.0 porque los lados de los poligonos y sus areas no pueden ser negativos |-
+    }
+}
+
+struct Polygon {
+    inmut type: string
+    inmut val_1: float
+    inmut val_2: float
+}

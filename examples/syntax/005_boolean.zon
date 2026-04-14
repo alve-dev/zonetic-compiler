@@ -1,0 +1,110 @@
+-| Boolean Operations in Zonetic |-
+
+-|
+Boolean operations, like arithmetic ones, require two operands: left and right.
+In Zonetic, these operators strictly require boolean operands; otherwise, it results 
+in a type error. The return value is always a 'bool'.
+|-
+
+-| Gate And Expression ('and' | '&&') |-
+inmut gate_and = true and false
+-|
+The 'and' operation (or AND gate) follows this logic: 
+If there is at least one 'false', the result is 'false'.
+
+┌─────────────────┬───────────┐
+|    Operation    |   Result  |
+├─────────────────┼───────────┤
+| false and false |   false   |
+├─────────────────┼───────────┤
+| true and false  |   false   |
+├─────────────────┼───────────┤
+| false and true  |   false   |
+├─────────────────┼───────────┤
+| true and true   |   true    |
+└─────────────────┴───────────┘
+
+In short: it is only 'true' if BOTH operands are 'true'.
+
+Optimization: Zonetic uses "Short-circuit evaluation." In an 'and' operation, 
+if the left operand is 'false', the right side is never evaluated because 
+the result is guaranteed to be 'false'.
+
+Note: You can also use '&&' as an alias for 'and'.
+|-
+
+-| Gate Or Expression ('or' | '||') |-
+inmut gate_or = true or false
+-|
+The 'or' operation (or OR gate) follows this logic:
+
+┌─────────────────┬───────────┐
+|    Operation    |   Result  |
+├─────────────────┼───────────┤
+| false or false  |   false   |
+├─────────────────┼───────────┤
+| true or false   |   true    |
+├─────────────────┼───────────┤
+| false or true   |   true    |
+├─────────────────┼───────────┤
+| true or true    |   true    |
+└─────────────────┴───────────┘
+
+In short: it is only 'false' if BOTH operands are 'false'. 
+Otherwise, it is 'true'. Zonetic also applies short-circuiting here: 
+if the left operand is 'true', the right side is skipped.
+
+Note: You can also use '||' as an alias for 'or'.
+|-
+
+-| Gate Not Expression ('not' | '!') |-
+inmut gate_not = not true
+-|
+The simplest gate. It is a unary operator that reverses the boolean value:
+- not true  -> false
+- not false -> true
+
+Zonetic allows consecutive 'not' operators:
+- Even count: The value remains the same (e.g., not not false -> false).
+- Odd count: The value is reversed (e.g., not not not false -> true).
+Internally, Zonetic handles this efficiently without redundant evaluations.
+|-
+
+-| Precedence Hierarchy |-
+-|
+Including these gates, the updated precedence list (highest to lowest) is:
+
+1. Literals & Parentheses
+2. Power: '**'
+3. Unary: '-', '+', 'not', '!'
+4. Multiplicative: '*', '/', '%'
+5. Additive: '+', '-'
+6. Comparison & Equality (Coming soon...)
+7. Not: 'not', '!'
+8. And: 'and', '&&'
+9. Or: 'or', '||'
+
+Example: not true or false or true and not false or not true
+1. Apply NOTs: (false) or false or true and (true) or (false)
+2. Apply ANDs: false or false or (true) or false
+3. Apply ORs (Left-to-Right): true
+|-
+
+inmut complex_bool = not true or false or true and not false or not true
+
+print("true and false:", gate_and)
+print("true or false:", gate_or)
+print("not true:", gate_not)
+print("Complex expression result:", complex_bool)
+
+-|
+Zonetic Simulated Terminal:
+---
+>> zon boolean.zon
+true and false: false
+true or false: true
+not true: false
+Complex expression result: true
+---
+Simulation finished! Tested and verified. [ ^_^]b
+|-

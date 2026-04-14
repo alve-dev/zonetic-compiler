@@ -1,0 +1,29 @@
+-|
+'print' is a built-in function.
+What is a function? If you are a programmer, you already know.
+If you have read the language documentation, you know too.
+If you are new to programming or haven't checked the Zonetic docs yet:
+Don't worry. I will explain functions in detail later in this syntax section.
+However, I'm introducing 'print' now so the following examples are easier 
+to understand.
+To learn more about functions right now, visit: 
+https://github.com/alve-dev/zonetic-official-docs/blob/main/docs/zonetic_docs/forms/function_form_doc.md
+|-
+
+-| 'print' outputs text to the terminal |-
+print("Hello")  -| Output: Hello\n (A newline is appended by default) |-
+print(10)       -| Automatically converts 10 -> "10" and outputs: 10\n |-
+
+inmut name = "Sasha"
+print("Hi, I am:", name)
+-| 
+The comma ',' automatically inserts a space " ".
+The function retrieves the value of 'name' ("Sasha") and concatenates everything:
+"Hi, I am:" + " " + "Sasha" = "Hi, I am: Sasha"
+Final output is printed with a newline.
+|-
+
+-| 
+You can test this by pasting the code into a .zon file. 
+Verified and tested. See you! [ ^_^]b 
+|-

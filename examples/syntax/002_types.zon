@@ -1,0 +1,56 @@
+-| Zonetic Native Types |-
+
+-| Integers ('int') |-
+inmut x = 10
+-|
+In Zonetic (and most systems languages), 'int' represents whole numbers, such as 10, 0, or 67543.
+The keyword for type annotation is 'int'.
+While you can use type inference (as seen in 000_variable.zon), I recommend using explicit 
+type annotations once your script is stable. Why? For readability and explicitness. 
+Inference is designed for rapid prototyping! [ ~_0]
+|-
+
+-| Floating-Point Numbers ('float') |-
+inmut pi = 3.1416
+-|
+Syntactically, 'float' represents decimal numbers.
+However, be careful: under the hood, they behave differently. 'float' is not exactly "decimals".
+In binary floating-point logic, 0.1 + 0.2 is not exactly 0.3, but a value slightly larger.
+This happens because computers operate in binary, not decimal. 
+(I will add a link to the "Float vs. Decimal" documentation here later).
+|-
+
+-| Booleans ('bool') |-
+inmut yes = true
+inmut no = false
+
+-|
+'bool' is crucial. It looks simple but represents the lowest level of computing.
+Booleans represent only two possibilities (a single bit of information):
+0 or 1 (Common in electronics and robotics).
+On or Off (The physical representation of electric current in a circuit).
+In Zonetic, we use 'true' or 'false'.
+
+Note: In languages like Python or C++, booleans and ints are often interchangeable.
+In Zonetic, I am strictly enforcing their separation. Even if 'true' is 1 and 'false' is 0
+internally, you cannot mix 'bool' and 'int' types.
+
+If you are curious, George Boole was the mathematician who created this logic:
+https://en.wikipedia.org/wiki/George_Boole
+And here is the wiki for Boolean Algebra (yes, math is everywhere!):
+https://en.wikipedia.org/wiki/Boolean_algebra
+|-
+
+-| Strings ('string') |-
+inmut name = "Sasha"
+-|
+At a high level, a 'string' is a data type that contains text. 
+The syntax allows both double quotes "text" and single quotes 'text'. There is no 
+functional difference between them. 
+Most characters on your keyboard are valid, but some require "escape sequences" 
+using the backslash '\':
+- \n: Newline (The one 'print()' uses at the end).
+- \t: Tabulation (Like the Tab key).
+- \': Inserts a single quote inside a string.
+- \": Inserts a double quote inside a string.
+|-

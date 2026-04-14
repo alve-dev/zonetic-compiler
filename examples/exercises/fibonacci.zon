@@ -1,0 +1,20 @@
+-|
+ | Write a program that prints the first 50 numbers of the Fibonacci 
+ | sequence, starting from 0.
+ | - The Fibonacci sequence is a series of numbers where the next 
+ |   number is always the sum of the two preceding ones.
+ |   0, 1, 1, 2, 3, 5, 8, 13...
+ |-
+
+print("0\n1\n1")
+mut counter = 3
+mut prev = 1
+mut current = 1
+
+while counter < 50 {
+    inmut sum = prev + current
+    prev = current
+    current = sum
+    print(sum)
+    counter += 1
+}
