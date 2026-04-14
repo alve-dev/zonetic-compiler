@@ -1,0 +1,19 @@
+# --- Python Specific ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Zonetic Specific ---
+draft.zon
+*.tmp
+.zonconfig
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Environment ---
+venv/
+env/
+.env
