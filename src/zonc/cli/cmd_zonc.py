@@ -248,7 +248,13 @@ def cmd_zon_set_file(args=None, mode=0):
         print(f"[zon info]: Writing to '{target_path.name}'. Type 'EOF' or Ctrl+D to save.")
         
     if mode == 1:
-        print(f"[zon info]: Repl Mode. Type 'EOF' or Ctrl+D to end.")
+        short_eof = ""
+        if os.name == "nt":
+            short_eof = "Ctrl+Z and Enter"
+        else:
+            short_eof = "Ctrl+D"
+            
+        print(f"[zon info]: Repl Mode. Type 'EOF' or {short_eof} to end.")
     
     lines = []
     try:

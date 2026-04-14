@@ -356,9 +356,13 @@ class Lexer:
         self._advance(1)
         is_float = False
         is_error = False
+        digit_sequence = 0
+        numero_completo = []
         
         while not self._is_end():
             if self._peek(0).isdigit():
+                digit_sequence += 1
+                numero_completo.append(self._peek(0))
                 self._advance(1)
             
             elif self._peek(0) == '.' and self._peek(1).isdigit():
@@ -379,9 +383,24 @@ class Lexer:
                     
                 else:
                     is_float = True     
-                    
+                
+                numero_completo.append(self._peek(0))
+                numero_completo.append(self._peek(1))
                 self._advance(2)
-            
+                
+            elif self._peek(0) == '_':
+                if is_float:
+                    #ERROR
+                    pass
+                    
+                else:
+                    digit_sequence = 0
+                    if digit_sequence != 3:
+                        #ERROR
+                        pass
+                        
+                self._advance(1)
+                
             elif self._peek(0).isalpha() or self._peek(0) == '_':
                 self._advance(1)
                 while self._peek(0).isalnum() or self._peek(0) == '_':
