@@ -69,3 +69,40 @@ To remove the zon command from your system:
 ```bash
 sudo rm /usr/local/bin/zon
 ```
+
+## Quick Start: REPL Mode
+
+Zonetic features a built-in **REPL** (Interactive Mode) that allows you to write and execute code on the fly without creating permanent files. It uses a temporary buffer that clears itself after execution.
+
+### How to use `zon repl`
+
+1. **Enter the REPL**:
+   ```bash
+   zon repl
+   ```
+2. **Write your code**: You can write multiple lines.
+3. **Execute**: Type `EOF` on a new line or press `Ctrl+D` to trigger execution.
+
+**Example:**
+```bash
+>> mut counter = 0 
+>> while counter <= 5 {
+>>    print(counter)
+>>    counter += 1
+>> }
+>> EOF
+```
+
+**Result:**
+```text
+--- Executing ---
+0
+1
+2
+3
+4
+5
+```
+
+> [!TIP]
+> This mode is perfect for testing logic or syntax quickly. Once the output is displayed, the temporary environment is wiped clean.
