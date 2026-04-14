@@ -94,6 +94,7 @@ Choose your operating system:
 * **Linux:** [Installation Guide for Linux](./install_guides/INSTALL_LINUX.md)
 * **Windows:** [Installation Guide for Windows](./install_guides/INSTALL_WINDOWS.md)
 * **macOS:** *Coming soon (Testing in progress)*
+* **Android:** [Installation Guide for Android](./install_guides/INSTALL_ANDROID.md)
 
 ![Language](https://img.shields.io/badge/written%20in-Python-yellow)
 [![Version](https://img.shields.io/badge/version-0--1--2-orange)](changelog.md)
