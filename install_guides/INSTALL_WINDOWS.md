@@ -18,7 +18,7 @@ Run these commands to go to your personal home folder and clone the project:
 
 ```powershell
 cd $HOME
-git clone https://github.com/YOUR_USERNAME/zonetic-lang-tree-walker-version.git zonetic
+git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git zonetic
 ```
 
 **WARNING:** Avoid modifying or moving files inside the `zonetic/` directory after installation, as it will break the global `zon` command.
