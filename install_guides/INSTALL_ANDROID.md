@@ -16,25 +16,37 @@ Termux is a terminal emulator that provides a Linux environment. **Do not use th
 
 ## 1. Prerequisites
 
-Zonetic requires Python 3.10 or higher. Update your packages and install the necessary tools:
-
+First, update your package list:
 ```bash
 pkg update && pkg upgrade
-pkg install git python binutils
 ```
 
-Verify your environment:
-
+### Install Python
+Zonetic requires Python 3.10 or higher. If you don't have it, install it:
+```bash
+pkg install python
+```
+Verify with:
 ```bash
 python --version
 ```
 
+### Install Git & Binutils
+If you cannot clone repositories, install Git:
+```bash
+pkg install git binutils
+```
+(Optional) Verify Git:
+```bash
+git --version
+```
+
 ## 2. Clone the Repository
 
-Clone the source code into a specific directory named 'zonetic':
+Once Git is installed, clone the source code:
 
 ```bash
-git clone https://github.com zonetic
+git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git zonetic
 ```
 
 > [!CAUTION]
