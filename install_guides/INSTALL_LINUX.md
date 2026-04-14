@@ -17,8 +17,8 @@ Clone the source code into a specific directory named 'zonetic':
 ```bash
 git clone https://github.com/YOUR_USERNAME/zonetic-lang-tree-walker-version.git zonetic
 ```
-
-**WARNING**: Do not modify, move, or delete files inside the `zonetic/` directory after installation. Doing so will break the compiler and the global command.
+>[!CAUTION]
+>**WARNING**: Do not modify, move, or delete files inside the `zonetic/` directory after installation. Doing so will break the compiler and the global command.
 
 ## 3. Navigate and Set Permissions
 
