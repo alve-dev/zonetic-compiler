@@ -87,5 +87,13 @@ The Zonetic logo is available in both SVG and PNG formats.
   > On mobile, SVG files may require a dedicated app to open. If your device does not support SVG natively, any vector graphics viewer will work.
 - **PNG** — raster format, works everywhere. Available in [`assets/icons/png/`](assets/icons/png/) in multiple sizes.
 
+## Installation
+
+Choose your operating system:
+
+* **Linux:** [Installation Guide for Linux](./install_guides/INSTALL_LINUX.md)
+* **Windows:** [Installation Guide for Windows](./install_guides/INSTALL_WINDOWS.md)
+* **macOS:** *Coming soon (Testing in progress)*
+
 ![Language](https://img.shields.io/badge/written%20in-Python-yellow)
 [![Version](https://img.shields.io/badge/version-0--1--2-orange)](changelog.md)

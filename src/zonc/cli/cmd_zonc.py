@@ -7,8 +7,12 @@ from zonc.semantic import Semantic
 from zonc.runtime import Interpreter, ZoneticRuntimeError
 from zonc.utils.print_ast import print_ast
 import pathlib
+import os
 
-CONFIG_FILE = pathlib.Path.home() / ".zonconfig"
+if os.name == 'nt':
+    CONFIG_FILE = pathlib.Path(os.environ.get('USERPROFILE', Path.home())) / ".zonconfig"
+else:
+    CONFIG_FILE = pathlib.Path.home() / ".zonconfig"
 
 def get_target_path(filename):
     local_file = pathlib.Path(filename)
@@ -48,7 +52,7 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
                 print("-- The engine only accepts files with the .zon extension. Please check your file type.")
                 return
             
-            with open(path_name, "r") as file_zon:
+            with open(path_name, "r", newline=None) as file_zon:
                 code = file_zon.read()
                 
             name_file = path_name.name
@@ -249,7 +253,7 @@ def cmd_zon_set_file(args=None, mode=0):
     lines = []
     try:
         while True:
-            line = input(">> ")
+            line = input(">> ").rstrip('\r')
             if line.strip().upper() == "EOF":
                 break
             lines.append(line)
@@ -270,7 +274,7 @@ def cmd_zon_set_file(args=None, mode=0):
 
     try:
         if mode == 0:
-            with open(target_path, "w", encoding="utf-8") as f:
+            with open(target_path, "w", encoding="utf-8", newline='\n') as f:
                 f.write("".join(lines))
         
             print(f"[zon info]: File forged successfully at: {target_path}")
