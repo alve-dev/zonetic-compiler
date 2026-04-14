@@ -275,7 +275,7 @@ def cmd_zon_set_file(args=None, mode=0):
     try:
         if mode == 0:
             with open(target_path, "w", encoding="utf-8", newline='\n') as f:
-                f.write("".join(lines))
+                f.write("\n".join(lines))
         
             print(f"[zon info]: File forged successfully at: {target_path}")
             confirm = input(f"Do you want to run {target_path.name} now? (y/n): ").lower()
@@ -286,7 +286,7 @@ def cmd_zon_set_file(args=None, mode=0):
             
         else:
             print("--- Executing ---")
-            cmd_zon_run(code_source="".join(lines))
+            cmd_zon_run(code_source="\n".join(lines))
             
     except Exception as e:
         print(f"[zon error]: Failed to save file. {e}")
