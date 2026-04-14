@@ -10,7 +10,7 @@ import pathlib
 import os
 
 if os.name == 'nt':
-    CONFIG_FILE = pathlib.Path(os.environ.get('USERPROFILE', Path.home())) / ".zonconfig"
+    CONFIG_FILE = pathlib.Path(os.environ.get('USERPROFILE', pathlib.Path.home())) / ".zonconfig"
 else:
     CONFIG_FILE = pathlib.Path.home() / ".zonconfig"
 
