@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 1. Environment Detection
 if [ -d "/data/data/com.termux/files/usr" ]; then
     ENV="TERMUX"
     BIN_DIR="$PREFIX/bin"
@@ -15,12 +14,11 @@ fi
 
 echo "[ ⌐■_■] <( Starting Zonetic setup for $ENV... )"
 
-# Dependency check function
 check_and_install() {
     if ! command -v $1 &> /dev/null; then
         echo "[ ⌐■_■] <( '$1' is missing. Install it now? (y/n) )"
         read -r answer </dev/tty
-        if [ "$answer" != "${answer#[Yy]}" ]; then
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
             echo "[ ⌐■_■] <( Installing $1... )"
             $PKG_MANAGER update -y && $PKG_MANAGER install $2 -y
         else
@@ -33,13 +31,10 @@ check_and_install() {
 check_and_install "git" "git"
 check_and_install "python3" "python3"
 
-# 2. Setup Directory with safety check
 INSTALL_DIR="$HOME/.zonetic"
 
 if [ -d "$INSTALL_DIR" ]; then
-    # Contamos cuántos archivos hay (incluyendo ocultos)
-    FILE_COUNT=$(ls -A "$INSTALL_DIR" | wc -l)
-    
+    FILE_COUNT=$(ls -A "$INSTALL_DIR" 2>/dev/null | wc -l)
     if [ "$FILE_COUNT" -gt 0 ]; then
         echo "[ ⌐■_■] <( Warning: $INSTALL_DIR is not empty ($FILE_COUNT files found). )"
         echo "[ ⌐■_■] <( Do you want to OVERWRITE its contents? (y/n) )"
@@ -47,6 +42,7 @@ if [ -d "$INSTALL_DIR" ]; then
         if [[ "$choice" =~ ^[Yy]$ ]]; then
             echo "[ ⌐■_■] <( Cleaning directory... )"
             rm -rf "${INSTALL_DIR:?}"/*
+            rm -rf "${INSTALL_DIR:?}"/.* 2>/dev/null
         else
             echo "[ ⌐■_■] <( Installation cancelled by user. )"
             exit 0
@@ -56,13 +52,13 @@ else
     mkdir -p "$INSTALL_DIR"
 fi
 
-
 cd "$INSTALL_DIR" || exit
 
-# 3. Sparse Checkout (Light installation)
 if [ ! -d ".git" ]; then
     git init -q
-    git remote add origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git
+    git remote add origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git 2>/dev/null || \
+    git remote set-url origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git
+    
     git config core.sparseCheckout true
     echo "src/zonc/*" > .git/info/sparse-checkout
     echo "scripts/*" >> .git/info/sparse-checkout
@@ -70,12 +66,18 @@ if [ ! -d ".git" ]; then
 fi
 
 echo "[ ⌐■_■] <( Syncing with GitHub repository... )"
-git pull origin main -q
+git pull origin main --rebase -q
 
-# 4. Create Global Command
-chmod +x "$INSTALL_DIR/scripts/zon_launcher.sh"
-echo "[ ⌐■_■] <( Configuring 'zon' global command... )"
-$SUDO ln -sf "$INSTALL_DIR/scripts/zon_launcher.sh" "$BIN_DIR/zon"
+LAUNCHER_PATH="$INSTALL_DIR/scripts/zon_launcher.sh"
+
+if [ -f "$LAUNCHER_PATH" ]; then
+    chmod +x "$LAUNCHER_PATH"
+    echo "[ ⌐■_■] <( Configuring 'zon' global command... )"
+    $SUDO ln -sf "$LAUNCHER_PATH" "$BIN_DIR/zon"
+else
+    echo "[ ⌐■_■] <( Error: Launcher script not found at $LAUNCHER_PATH )"
+    exit 1
+fi
 
 echo "------------------------------------------------"
 echo "[ ⌐■_■] <( Zonetic installed successfully! )"
