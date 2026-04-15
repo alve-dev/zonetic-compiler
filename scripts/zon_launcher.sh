@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# [ ⌐■_■] <( Finding my real home... )
+# Este truco sigue el symlink hasta la carpeta real
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
+# Ahora REPO_DIR será correctamente /home/usuario/.zonetic
+REPO_DIR="$(cd "$DIR/.." && pwd)"
 MAIN_PY="$REPO_DIR/src/zonc/main.py"
 
 if [ "$1" == "update" ]; then
