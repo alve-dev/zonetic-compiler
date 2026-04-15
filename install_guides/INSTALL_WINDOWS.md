@@ -1,108 +1,89 @@
 # Zonetic Installation Guide (Windows)
 
-The repository includes a `zon.bat` launcher inside the `src/zonc/` directory. Follow these steps to configure the CLI globally.
+Follow these steps to configure the Zonetic command-line interface on Windows. This process uses an automated batch script to handle dependencies, directory setup, and environment variables.
 
 ## 1. Prerequisites
 
-Ensure **Python 3.10+** is installed. Verify in PowerShell:
+Before installing, ensure you have **Git** and **Python 3** available in your system.
+Verify them by running these commands in CMD or PowerShell:
 
-```powershell
+'''batch
+git --version
 python --version
-```
+'''
 
-## 2. Clone the Repository
+## 2. Quick Installation (Automated)
 
-Before cloning, ensure you are in a safe directory (like your User folder). **Do not install Zonetic inside C:\Windows or System32.**
+Open **Command Prompt (CMD)** and run the following command. This will download the installer, execute it to set up Zonetic in `~/.zonetic`, and then clean up the temporary installer file:
 
-Run these commands to go to your personal home folder and clone the project:
+'''batch
+curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install_windows.bat -o install_zon.bat && install_zon.bat && del install_zon.bat
+'''
 
-```powershell
-cd $HOME
-git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git zonetic
-```
+> [!IMPORTANT]
+> **Restart your Terminal:** Windows requires a new terminal session to recognize the changes made to the "Path" environment variable. Please close and reopen your CMD or PowerShell window.
 
-**WARNING:** Avoid modifying or moving files inside the `zonetic/` directory after installation, as it will break the global `zon` command.
+## 3. Full Installation
 
-## 3. Get the Installation Path
+To download the entire repository, including the `examples/` and `docs/` folders:
 
-Navigate to the compiler directory and get the full path to copy it:
+'''batch
+curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install_windows_comple.bat -o install_zon.bat && install_zon.bat && del install_zon.bat
+'''
 
-```powershell
-cd zonetic/src/zonc
-(Get-Item .).FullName
-```
+## 4. Keep Zonetic Updated
 
-*Copy the output of the last command (e.g., C:\Users\Name\zonetic\src\zonc).*
+The new CLI handles updates automatically. You don't need to download the installer again; just run:
 
-## 4. Add to Environment Variables
-
-1. Open the **Start Menu**, search for "Environment Variables" and select **Edit the system environment variables**.
-2. Click **Environment Variables**.
-3. Under **User variables**, select **Path** and click **Edit**.
-4. Click **New** and paste the path you copied in Step 3.
-5. Click **OK** on all windows and **restart your terminal**.
-
-**To reset your terminal, you can do the following:**
-```powershell
-exit
-```
-*(And then open a new terminal window).*
+'''bash
+zon update
+'''
 
 ## 5. Verify Installation
 
-Open a new PowerShell or CMD window and run:
+Check if Zonny is ready to help you:
 
-```powershell
+'''bash
 zon vers
-```
+'''
 
 ---
 
 ## Troubleshooting
 
-### Command not found
-If `zon` is not recognized, ensure you restarted PowerShell after editing the Environment Variables.
+### 'zon' is not recognized
+1. **Restart your Terminal:** This is the most common fix. 
+2. **Manual Path Check:** If it still fails, ensure that `C:\Users\<YourUser>\.zonetic\scripts` is listed in your User Environment Variables (Path).
 
-### Broken Link
-If you move the `zonetic` folder, you must update the Path in Environment Variables with the new location of `src/zonc`.
+### Python App Execution Aliases
+If typing `python` opens the Microsoft Store, search for **"Manage app execution aliases"** in the Windows Start Menu and turn off the aliases for "Python".
 
 ## Uninstallation
 
-To remove the `zon` command, delete the entry from your Environment Variables Path.
+To completely remove Zonetic from your system:
+
+1. Delete the installation folder:
+   '''batch
+   rd /s /q "%USERPROFILE%\.zonetic"
+   '''
+2. Remove the `%USERPROFILE%\.zonetic\scripts` entry from your **Environment Variables** (Path) manually.
 
 ## Quick Start: REPL Mode
 
-Zonetic features a built-in **REPL** (Interactive Mode) that allows you to write and execute code on the fly without creating permanent files. It uses a temporary buffer that clears itself after execution.
-
-### How to use `zon repl`
+How to use `zon repl`:
 
 1. **Enter the REPL**:
-   ```bash
+   '''bash
    zon repl
-   ```
-2. **Write your code**: You can write multiple lines.
-3. **Execute**: Type `EOF` on a new line or press `Ctrl+D` to trigger execution.
+   '''
+2. **Write your code**: You can type multiple lines.
+3. **Execute**: Type `EOF` on a new line or press `Ctrl+Z and Enter`.
 
-**Example:**
-```bash
->> mut counter = 0 
->> while counter <= 5 {
->>    print(counter)
->>    counter += 1
->> }
+'''bash
+>> mut x = 100
+>> print("Value: ", x)
 >> EOF
-```
-
-**Result:**
-```text
---- Executing ---
-0
-1
-2
-3
-4
-5
-```
+'''
 
 > [!TIP]
 > This mode is perfect for testing logic or syntax quickly. Once the output is displayed, the temporary environment is wiped clean.
