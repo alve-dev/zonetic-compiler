@@ -19,7 +19,7 @@ echo "[ ⌐■_■] <( Starting Zonetic setup for $ENV... )"
 check_and_install() {
     if ! command -v $1 &> /dev/null; then
         echo "[ ⌐■_■] <( '$1' is missing. Install it now? (y/n) )"
-        read -r answer
+        read -r answer </dev/tty
         if [ "$answer" != "${answer#[Yy]}" ]; then
             echo "[ ⌐■_■] <( Installing $1... )"
             $PKG_MANAGER update -y && $PKG_MANAGER install $2 -y
@@ -40,7 +40,7 @@ if [ -d "$INSTALL_DIR" ]; then
     if [ "$(ls -A "$INSTALL_DIR")" ]; then
         echo "[ ⌐■_■] <( Warning: $INSTALL_DIR is not empty. )"
         echo "[ ⌐■_■] <( Do you want to OVERWRITE its contents? (y/n) )"
-        read -r choice
+        read -r choice </dev/tty
         if [ "$choice" != "${choice#[Yy]}" ]; then
             echo "[ ⌐■_■] <( Cleaning directory... )"
             rm -rf "${INSTALL_DIR:?}"/*
