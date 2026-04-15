@@ -62,7 +62,7 @@ cd "$INSTALL_DIR" || exit
 # Clone all content
 if [ ! -d ".git" ]; then
     echo "[ ⌐■_■] <( Cloning full repository... )"
-    git clone https://github.com .
+    git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git
 else
     echo "[ ⌐■_■] <( Updating existing repository... )"
     git pull origin main
