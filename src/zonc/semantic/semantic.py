@@ -430,7 +430,7 @@ class Semantic:
         
         if func_symbol.is_native and func_symbol.is_varidic:
             if not node.params is None:
-                for expr in node.params:
+                for i, expr in enumerate(node.params):
                     self.infer_expr(expr, scope)
             return
         
