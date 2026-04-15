@@ -1,29 +1,23 @@
 #!/usr/bin/env bash
-
-# [ ⌐■_■] <( Locating the source code... )
-# Detects the repository root relative to this script
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MAIN_PY="$REPO_DIR/src/zonc/main.py"
 
 if [ "$1" == "update" ]; then
     echo "[ ⌐■_■] <( Checking for updates on GitHub... )"
-    
-    # 1. Fetch metadata without touching local files
     git -C "$REPO_DIR" fetch origin main -q
 
-    # 2. Get commit messages
     REMOTE_MSG=$(git -C "$REPO_DIR" log -1 origin/main --pretty=format:%s)
     LOCAL_MSG=$(git -C "$REPO_DIR" log -1 --pretty=format:%s)
 
-    # 3. Check stability flags
     if [[ "$REMOTE_MSG" == *"[NOSTABLE]"* ]]; then
         echo "[ ⌐■_■] <( Error: Remote version is marked as [NOSTABLE]. )"
         echo "[ ⌐■_■] <( Update aborted to keep your system safe. )"
         exit 1
     fi
-
-    # 4. Check if already updated
+    
     if [[ "$REMOTE_MSG" == "$LOCAL_MSG" ]]; then
-        echo "[ ⌐■_■] <( You are already up to date! Version: $LOCAL_MSG )"
+        echo "[ ⌐■_■] <( You are already up to date! )"
+        echo "[ ⌐■_■] <( Version: $LOCAL_MSG )"
         exit 0
     fi
 
@@ -38,6 +32,9 @@ if [ "$1" == "update" ]; then
     exit 0
 fi
 
-# [ ⌐■_■] <( Running Zonetic Compiler... )
-# Pass all arguments to the Python main.py
-python3 "$REPO_DIR/src/zonc/main.py" "$@"
+if [ -f "$MAIN_PY" ]; then
+    python3 "$MAIN_PY" "$@"
+else
+    echo "[ ⌐■_■] <( Error: Cannot find main.py at $MAIN_PY )"
+    exit 1
+fi
