@@ -37,11 +37,14 @@ check_and_install "python3" "python3"
 INSTALL_DIR="$HOME/.zonetic"
 
 if [ -d "$INSTALL_DIR" ]; then
-    if [ "$(ls -A "$INSTALL_DIR")" ]; then
-        echo "[ ⌐■_■] <( Warning: $INSTALL_DIR is not empty. )"
+    # Contamos cuántos archivos hay (incluyendo ocultos)
+    FILE_COUNT=$(ls -A "$INSTALL_DIR" | wc -l)
+    
+    if [ "$FILE_COUNT" -gt 0 ]; then
+        echo "[ ⌐■_■] <( Warning: $INSTALL_DIR is not empty ($FILE_COUNT files found). )"
         echo "[ ⌐■_■] <( Do you want to OVERWRITE its contents? (y/n) )"
         read -r choice </dev/tty
-        if [ "$choice" != "${choice#[Yy]}" ]; then
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
             echo "[ ⌐■_■] <( Cleaning directory... )"
             rm -rf "${INSTALL_DIR:?}"/*
         else
@@ -52,6 +55,7 @@ if [ -d "$INSTALL_DIR" ]; then
 else
     mkdir -p "$INSTALL_DIR"
 fi
+
 
 cd "$INSTALL_DIR" || exit
 
