@@ -4,6 +4,28 @@ All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
 ---
+## v0.1.4 — The Install & Auto-Update
+
+Automated deployment system and self-syncing compiler for Linux and Android
+
+### CLI & Distribution
+    
+Automated Installers — Added `install.sh` (Lightweight) and `install_complete.sh` (Full) for one-command setup via curl.
+    Zonetic Launcher — Implementation of `zon_launcher.sh`, a smart wrapper that handles the global `zon` command and system updates.
+    Auto-Update System — Added `zon update` command. It fetches updates from GitHub and performs a safe synchronization.
+    Stability Control — The update system now parses commit messages to verify stability. It only allows updates if the commit is marked with the `[STABLE|version]` flag and blocks `[NOSTABLE]` builds.
+    Cross-Platform Synchronization — Simplified workflow for developers moving between Windows, Linux, and Termux without re-cloning.
+    Sparse Checkout Integration — The lightweight installer now only pulls essential source code and scripts, reducing disk footprint.
+
+### Technical Fixes
+
+Path Resolution — Fixed symlink recursion issues in the launcher to correctly locate `main.py` regardless of the execution directory.
+    Environment Detection — The installer now automatically detects Termux vs Standard Linux to adjust paths and sudo requirements.
+
+> **Coming next — v0.1.5: The Install Auto Windows Update**
+
+---
+
 ## v0.1.3 — *The CLI Update 2.0*
 > Complete environment overhaul with cross-platform distribution and language refinements
 
@@ -40,10 +62,6 @@ Versions are listed from newest to oldest.
 **Technical Fixes**
 - **F-String Compatibility** — Refactored internal rendering to support Python 3.11 by removing nested quotes and backslashes in template expressions.
 - **IO Normalization** — Fixed newline stripping issues in Windows environments during file generation.
-
----
-
-> **Coming next — v0.1.4: The Closure Update**
 
 ---
 
