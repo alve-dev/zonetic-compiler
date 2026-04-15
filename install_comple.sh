@@ -18,8 +18,15 @@ echo "[ ⌐■_■] <( Starting FULL Zonetic installation for $ENV... )"
 # Dependency check function
 check_and_install() {
     if ! command -v $1 &> /dev/null; then
-        echo "[ ⌐■_■] <( Installing missing dependency: $1... )"
-        $PKG_MANAGER update -y && $PKG_MANAGER install $2 -y
+        echo "[ ⌐■_■] <( '$1' is missing. Install it now? (y/n) )"
+        read -r answer </dev/tty
+        if [ "$answer" != "${answer#[Yy]}" ]; then
+            echo "[ ⌐■_■] <( Installing $1... )"
+            $PKG_MANAGER update -y && $PKG_MANAGER install $2 -y
+        else
+            echo "[ ⌐■_■] <( Error: $1 is required. Aborting setup. )"
+            exit 1
+        fi
     fi
 }
 
