@@ -1,75 +1,38 @@
 # Zonetic Installation Guide (Android - Termux)
 
-Follow these steps to configure the **Zonetic** command-line interface on Android. This process uses **Termux** to create a global environment for the compiler.
+Follow these steps to configure the **Zonetic** command-line interface on Android. This process uses **Termux** and an automated script for a hassle-free setup.
 
 ## 0. Install Termux (Read Carefully)
 
-Termux is a terminal emulator that provides a Linux environment. **Do not use the Google Play Store version**, as it is outdated.
+Do not use the Google Play Store version, as it is outdated.
 
-1.  **Download**: Go to the [Official F-Droid Page](https://f-droid.org/es/packages/com.termux/).
-2.  **Select Version**: Scroll down to the "Versions" or "Packages" section. Download the latest version available that **DOES NOT** have the "(beta)" tag in its name.
-3.  **Install the APK**:
-    *   Once downloaded, tap the file to install.
-    *   **Security Prompt**: Android might say it is an "Unsafe App" because it's an APK.
-    *   **How to bypass**: Tap on **"More details"** and then select **"Install anyway"**.
-4.  **Open**: Launch Termux and wait for the "Installing bootstrap" process to finish.
+1.  **Download**: Go to the [Official F-Droid Page](https://f-droid.org).
+2.  **Install the APK**: Download the latest version that **DOES NOT** have the "(beta)" tag.
+3.  **Open**: Launch Termux and wait for the "Installing bootstrap" process to finish.
 
-## 1. Prerequisites
+## 1. Quick Installation
 
-First, update your package list:
-```bash
-pkg update && pkg upgrade
-```
-
-### Install Python
-Zonetic requires Python 3.10 or higher. If you don't have it, install it:
-```bash
-pkg install python
-```
-Verify with:
-```bash
-python --version
-```
-
-### Install Git & Binutils
-If you cannot clone repositories, install Git:
-```bash
-pkg install git binutils
-```
-(Optional) Verify Git:
-```bash
-git --version
-```
-
-## 2. Clone the Repository
-
-Once Git is installed, clone the source code:
+Run the following command inside Termux. It will automatically check for Python/Git and set up the `zon` command:
 
 ```bash
-git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git zonetic
+curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install.sh | bash
 ```
 
-> [!CAUTION]
-> **WARNING**: Do not modify, move, or delete files inside the `zonetic/` directory after installation. Doing so will break the compiler and the global command.
+> [!TIP]
+> **Full Installation**: To download examples and documentation along with the compiler:
+> ```bash
+> curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install_comple.sh | bash
+> ```
 
-## 3. Navigate and Set Permissions
+## 2. Keep Zonetic Updated
 
-Move to the compiler source directory and grant execution permissions to the entry point:
+To get the latest improvements directly from the source. The installer ensures only stable commits are downloaded:
 
 ```bash
-cd zonetic/src/zonc
-chmod +x main.py
+zon update
 ```
 
-## 4. Create the System Link
-
-Link the script to the internal binary folder (no sudo required in Termux):
-
-```bash
-ln -s $(pwd)/main.py $PREFIX/bin/zon
-```
-
-## 5. Verify Installation
+## 3. Verify Installation
 
 Test the installation by checking the version:
 
@@ -82,24 +45,17 @@ zon vers
 ## Troubleshooting
 
 **Command not found**
-If the terminal does not recognize the command immediately, restart Termux or run:
+If the terminal does not recognize the command immediately, run:
 ```bash
 hash -r
 ```
 
-**Broken Link**
-The symbolic link depends on the absolute path of the source file. If you move the zonetic folder, you must recreate the link:
-```bash
-rm $PREFIX/bin/zon
-cd new/path/to/zonetic/src/zonc
-ln -s $(pwd)/main.py $PREFIX/bin/zon
-```
-
 ## Uninstallation
 
-To remove the `zon` command from your system:
+To remove the `zon` command and files:
 
 ```bash
+rm -rf ~/.zonetic
 rm $PREFIX/bin/zon
 ```
 
@@ -107,38 +63,10 @@ rm $PREFIX/bin/zon
 
 ## Quick Start: REPL Mode
 
-Zonetic features a built-in **REPL** (Interactive Mode) that allows you to write and execute code on the fly without creating permanent files. It uses a temporary buffer that clears itself after execution.
-
 ### How to use `zon repl`
 
 1. **Enter the REPL**:
    ```bash
    zon repl
    ```
-2. **Write your code**: You can write multiple lines.
-3. **Execute**: Type `EOF` on a new line or press `Ctrl+D` to trigger execution.
-
-**Example:**
-```bash
->> mut counter = 0 
->> while counter <= 5 {
->>    print(counter)
->>    counter += 1
->> }
->> EOF
-```
-
-**Result:**
-```text
---- Executing ---
-0
-1
-2
-3
-4
-5
-```
-
-> [!TIP]
-> This mode is perfect for testing logic or syntax quickly. Once the output is displayed, the temporary environment is wiped clean.
-
+2. **Execute**: Type `EOF` on a new line or press `Ctrl+D`.
