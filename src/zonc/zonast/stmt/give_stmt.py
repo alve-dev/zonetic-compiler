@@ -13,3 +13,6 @@ class GiveStmt(NodeStmt):
         
     def __repr__(self):
         return f"{__class__.__name__}(value={self.value})"
+    
+    def get_children(self):
+        return [self.value]

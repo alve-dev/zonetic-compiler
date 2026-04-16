@@ -16,3 +16,13 @@ class CallFunc(Node):
         self.keyparams = keyparams
         self.span = span
         self.span_name = span_name
+        
+    def get_details(self):
+        return f"{self.name}()"
+    
+    def get_children(self):
+        if not self.keyparams is None:
+            for key, param in self.keyparams.items():
+                self.params.append(param[0])
+
+        return self.params

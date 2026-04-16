@@ -20,3 +20,7 @@ class DeclarationStmt(NodeStmt):
     
     def __repr__(self):
         return f"{__class__.__name__}(name={self.name}, type={self.type})"
+    
+    def get_details(self):
+        mut_str = "mut" if self.mut else "inmut"
+        return f"{mut_str} {self.name}: {self.type.name}"

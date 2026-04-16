@@ -18,3 +18,9 @@ class AssignmentStmt(NodeStmt):
     
     def __repr__(self):
         return f"{__class__.__name__}(name={self.name}, value={self.value})"
+    
+    def get_details(self):
+        return f"{self.name}"
+    
+    def get_children(self):
+        return [self.value]

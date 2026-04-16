@@ -14,3 +14,9 @@ class AssignmentFieldStmt(NodeStmt):
         self.object_name = object_name
         self.field_assign = field_assign
         self.span = span
+
+    def get_details(self):
+        return 
+    
+    def get_children(self):
+        pass

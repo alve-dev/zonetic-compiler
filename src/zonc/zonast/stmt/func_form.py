@@ -20,3 +20,11 @@ class FuncForm(NodeStmt):
         self.block_expr = block_expr
         self.span_name = span_name
         self.span = span
+        
+    def get_details(self):
+        return f"{self.name}() -> {self.return_type.name}"
+    
+    def get_children(self):
+        children = [self.block_expr]
+        if not self.params is None: children.insert(0, self.params)
+        return children

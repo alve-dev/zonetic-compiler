@@ -16,3 +16,6 @@ class UnaryExpr(NodeExpr):
         
     def __repr__(self):
         return f"{__class__.__name__}(operator='{self.operator}', value={self.value})"
+    
+    def get_children(self):
+        return [self.operator, self.value]

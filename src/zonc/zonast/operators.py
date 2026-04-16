@@ -29,4 +29,6 @@ class Operator(Enum):
     GE = auto()  # `>=`, Greater or Equal
     LE = auto()  # `<=`, Less or Equal
     
+    def get_details(self):
+        return self.name
     

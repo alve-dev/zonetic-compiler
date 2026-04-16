@@ -18,3 +18,6 @@ class BlockExpr(NodeExpr):
     
     def __repr__(self):
         return f"{__class__.__name__}"
+    
+    def get_children(self):
+        return self.stmts

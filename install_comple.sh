@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Environment Detection
 if [ -d "/data/data/com.termux/files/usr" ]; then
     ENV="TERMUX"
     BIN_DIR="$PREFIX/bin"
@@ -13,18 +12,30 @@ else
     SUDO="sudo"
 fi
 
-echo "[ ⌐■_■] <( Starting FULL Zonetic installation for $ENV... )"
+echo "[ ⌐■_■] <(\"Starting Zonetic setup for $ENV...\")"
 
-# Dependency check function
 check_and_install() {
-    if ! command -v $1 &> /dev/null; then
-        echo "[ ⌐■_■] <( '$1' is missing. Install it now? (y/n) )"
-        read -r answer </dev/tty
-        if [ "$answer" != "${answer#[Yy]}" ]; then
-            echo "[ ⌐■_■] <( Installing $1... )"
-            $PKG_MANAGER update -y && $PKG_MANAGER install $2 -y
+    if ! command -v "$1" &> /dev/null; then
+        answer=""
+        read -p "[ ⌐■_■] <(\"Error: '$1' is missing. Install it now? (y/n)\") " input </dev/tty
+        answer=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$answer" != "y" && "$answer" != "n" ]]; then
+            while true; do
+                read -p "[ o_0] <(\"Are you feeling okay?, I need a (y/n), don't fail me now\") " input </dev/tty
+                answer=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+
+                if [[ "$answer" == "y" || "$answer" == "n" ]]; then
+                    break
+                fi
+            done
+        fi
+
+        if [[ "$answer" == "y" ]]; then
+            echo "[ ⌐■_■] <(\"Installing '$1'...\")"
+            $PKG_MANAGER update -y > /dev/null 2>&1 && $PKG_MANAGER install "$2" -y > /dev/null 2>&1
         else
-            echo "[ ⌐■_■] <( Error: $1 is required. Aborting setup. )"
+            echo "[ X_X] <(\"Error: '$1' is required. Aborting setup.\")"
             exit 1
         fi
     fi
@@ -33,46 +44,60 @@ check_and_install() {
 check_and_install "git" "git"
 check_and_install "python3" "python3"
 
-# 2. Setup Directory with safety check
 INSTALL_DIR="$HOME/.zonetic"
 
 if [ -d "$INSTALL_DIR" ]; then
-    # Contamos cuántos archivos hay (incluyendo ocultos)
-    FILE_COUNT=$(ls -A "$INSTALL_DIR" | wc -l)
-    
+    FILE_COUNT=$(ls -A "$INSTALL_DIR" 2>/dev/null | wc -l)
     if [ "$FILE_COUNT" -gt 0 ]; then
-        echo "[ ⌐■_■] <( Warning: $INSTALL_DIR is not empty ($FILE_COUNT files found). )"
-        echo "[ ⌐■_■] <( Do you want to OVERWRITE its contents? (y/n) )"
-        read -r choice </dev/tty
-        if [[ "$choice" =~ ^[Yy]$ ]]; then
-            echo "[ ⌐■_■] <( Cleaning directory... )"
+        echo "[ ⌐■_■] <(\"Warning: $INSTALL_DIR is not empty ($FILE_COUNT files found).\")"
+        read -p "[ ⌐■_■] <(\"Do you want to OVERWRITE its contents? (y/n)\") " choice </dev/tty
+
+        choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$choice" != "y" && "$choice" != "n" ]]; then
+            while true; do
+                read -p "[ o_0] <(\"Are you feeling okay?, I need a (y/n), don't fail me now\") " choice </dev/tty
+                choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
+                if [[ "$choice" == "y" || "$choice" == "n" ]]; then
+                    break
+                fi
+            done
+        fi
+
+        if [[ "$choice" == "y" ]]; then
+            echo "[ ⌐■_■] <(\"Cleaning directory...\")"
             rm -rf "${INSTALL_DIR:?}"/*
+            rm -rf "${INSTALL_DIR:?}"/.* 2>/dev/null
         else
-            echo "[ ⌐■_■] <( Installation cancelled by user. )"
+            echo "[ ⌐■_■] <(\"Installation cancelled by user.\")"
             exit 0
         fi
     fi
 else
-    mkdir -p "$INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR" > /dev/null 2>&1
 fi
-
 
 cd "$INSTALL_DIR" || exit
 
-# Clone all content
 if [ ! -d ".git" ]; then
-    echo "[ ⌐■_■] <( Cloning full repository... )"
-    git clone https://github.com/alve-dev/zonetic-lang-tree-walker-version.git
+    echo "[ ⌐■_■] <(\"Cloning full repository...\")"
+    git clone -q https://github.com/alve-dev/zonetic-lang-tree-walker-version.git . > /dev/null 2>&1
 else
-    echo "[ ⌐■_■] <( Updating existing repository... )"
+    echo "[ ⌐■_■] <(\"Updating existing repository...\")"
     git pull origin main
 fi
 
-# Create Global Command
-chmod +x "scripts/zon_launcher.sh"
-echo "[ ⌐■_■] <( Setting up global 'zon' command... )"
-$SUDO ln -sf "$INSTALL_DIR/scripts/zon_launcher.sh" "$BIN_DIR/zon"
+LAUNCHER_PATH="$INSTALL_DIR/scripts/zon_launcher.sh"
+
+if [ -f "$LAUNCHER_PATH" ]; then
+    chmod +x "$LAUNCHER_PATH"
+    echo "[ ⌐■_■] <(\"Configuring 'zon' global command...\")"
+    $SUDO ln -sf "$LAUNCHER_PATH" "$BIN_DIR/zon" > /dev/null 2>&1
+else
+    echo "[ X_X] <(\"Error: Launcher script not found at $LAUNCHER_PATH\")"
+    exit 1
+fi
 
 echo "------------------------------------------------"
-echo "[ ⌐■_■] <( Full installation finished at $INSTALL_DIR )"
-echo "[ ⌐■_■] <( Type 'zon' to start! )"
+echo "[ ⌐■_■] <(\"Zonetic installed successfully!\")"
+echo "[ ⌐■_■] <(\"Try running: zon vers\")"

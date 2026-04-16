@@ -13,3 +13,10 @@ class InitializationStmt(NodeStmt):
         self.decl_stmt = decl_stmt
         self.assign_stmt = assign_stmt
         self.span = span
+        
+    def get_details(self):
+        mut_str = "mut" if self.decl_stmt.mut else "inmut"
+        return f"{mut_str} {self.decl_stmt.name}: {self.decl_stmt.type.name} = expr"
+    
+    def get_children(self):
+        return [self.assign_stmt.value]

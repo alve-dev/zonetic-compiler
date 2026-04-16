@@ -16,3 +16,13 @@ class ConstructExpr(NodeExpr):
         self.list_assign = list_assign
         self.dict_assign = dict_assign
         self.span = span
+        
+    def get_details(self):
+        return f"{self.name_struct}[]"
+    
+    def get_children(self):
+        if not self.dict_assign is None:
+            for key, param in self.dict_assign.items():
+                self.list_assign.append(param[0])
+
+        return self.list_assign

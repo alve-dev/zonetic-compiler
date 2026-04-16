@@ -10,3 +10,6 @@ class ReturnStmt(NodeStmt):
     ):
       self.value = value
       self.span = span
+      
+    def get_children(self):
+       return [self.value]

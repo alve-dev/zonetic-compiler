@@ -15,3 +15,5 @@ class BinaryExpr(NodeExpr):
         self.right = right
         self.span = span
     
+    def get_children(self):
+        return [self.left, self.operator, self.right]

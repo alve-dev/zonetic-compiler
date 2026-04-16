@@ -119,7 +119,7 @@ class Parser:
             
         return node
     
-    def parse_program(self) -> Program:
+    def parse_program(self, name_file: str) -> Program:
         statements: list[Node] = []
         scope = Enviroment()
         
@@ -143,7 +143,7 @@ class Parser:
             node = self.parse_statement(scope, False)
             self._add_node_to_list(statements, node)
             
-        return Program(statements, scope)
+        return Program(statements, scope, name_file)
     
     def parse_statement(self, scope: Enviroment, block: bool) -> Node:
         if self.match_token_type(TokenType.KEYWORD_MUT, TokenType.KEYWORD_INMUT):

@@ -13,3 +13,6 @@ class VariableExpr(NodeExpr):
     
     def __repr__(self):
         return f"{__class__.__name__}(name={self.name})"
+    
+    def get_details(self):
+        return self.name

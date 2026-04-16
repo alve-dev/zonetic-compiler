@@ -18,3 +18,10 @@ class Param:
         self.default = default
         self.span = span
         self.span_name = span_name
+        
+    def get_details(self):
+        mut_str = "mut" if self.mut else "inmut"
+        return f"{mut_str} {self.name}: {self.zontype.name}"
+    
+    def get_children(self):
+        return [self.default]

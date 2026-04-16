@@ -15,3 +15,6 @@ class WhileForm(NodeExpr):
         
     def __repr__(self):
         return f"{__class__.__name__}(condition_field={self.condition_field})"
+    
+    def get_children(self):
+        return [self.condition_field, self.block_expr]

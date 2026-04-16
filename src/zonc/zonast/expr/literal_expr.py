@@ -17,7 +17,7 @@ class IntLiteral(LiteralNode):
         
     def __repr__(self) -> str:
         return f"{__class__.__name__}(value={self.value})"
-
+    
 
 class FloatLiteral(LiteralNode):
     def __init__(
@@ -46,6 +46,8 @@ class StringLiteral(LiteralNode):
     def __repr__(self):
         return f"{__class__.__name__}(value='{self.value}')"
 
+    def get_details(self):
+        return self.value.replace('\n', "\\n").replace('\t', "\\t")
 
 class BoolLiteral(LiteralNode):
     def __init__(

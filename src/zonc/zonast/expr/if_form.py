@@ -13,6 +13,9 @@ class IfBranch:
         self.cond = cond
         self.span = span
         self.block = block
+        
+    def get_children(self):
+        return [self.cond, self.block]
 
 class IfForm(Node):
     def __init__(
@@ -29,6 +32,16 @@ class IfForm(Node):
         self.len_branch = len_branch
         self.span = span
     
-    
     def __repr__(self):
         return f"{__class__.__name__}"
+    
+    def get_children(self):
+        children = [self.if_branch]
+        if not self.elif_branches is None:
+            for branch in self.elif_branches:
+                children.append(branch)
+                
+        if not self.else_branch is None:
+            children.append(branch)
+            
+        return children
