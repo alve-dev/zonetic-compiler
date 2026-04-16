@@ -5,6 +5,17 @@
 
 # Zonetic Programming Language — Tree-Walker
 
+## What this project demonstrates
+
+Zonetic is not just a programming language — it showcases practical experience in:
+
+- Building CLI tools with real command systems (`zon`)
+- Creating cross-platform installers (.sh, .ps1)
+- Automating environment setup (PATH, execution flow)
+- Designing structured and scalable software systems
+
+These are the same skills I use to build automation scripts, CLI tools, and developer utilities.
+
 A statically typed, expression-oriented language designed for robotics.
 
 > **This repository contains the tree-walker interpreter version of Zonetic.** > The bytecode VM version will live in a separate repository once development begins.
@@ -76,9 +87,9 @@ x: 3 y: 7
 
 > Full language documentation → [zonetic-official-docs](https://github.com/alve-dev/zonetic-official-docs)
 
-## Pipeline
+## Pipeline run file
 ```
-source → lexer → normalizer → parser → semantic → interpreter
+launcher → cli -> lexer → normalizer → parser → semantic → interpreter
 ```
 
 Each phase has its own indexed error codes — `E0xxx` lexer, `E1xxx` normalizer, `E2xxx` parser, `E3xxx` semantic, `E4xxx` runtime.
