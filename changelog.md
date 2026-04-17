@@ -4,6 +4,26 @@ All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
 ---
+## v0.1.5 — The Install Windows & Auto-Update
+> Full Windows ecosystem support with automated deployment and cross-platform update parity
+
+**CLI & Distribution**
+
+- **Windows Native Installer** — Added `install.ps1`, a dedicated PowerShell installer that automates the entire setup on Windows environments.
+- **Automated Path Configuration** — The Windows installer now automatically injects the Zonetic binary path into the `User Environment Variables`, enabling global `zon` command access without manual PATH editing.
+- **Zonetic Windows Launcher** — Implementation of `zon.ps1`, a PowerShell-native wrapper that replicates the behavior of the Linux/Termux launchers.
+- **Universal Auto-Update** — The `zon update` command is now fully functional on Windows. It synchronizes with the GitHub repository, handles version tracking, and performs hot-swaps of the compiler files.
+- **Parity Architecture** — Refactored the update logic to ensure consistent behavior across Android (Termux), Linux, and Windows using environment-specific scripts.
+
+**Technical Fixes**
+
+- **PowerShell Execution Policies** — The installer now handles common execution policy restrictions to ensure a smooth one-command installation experience.
+- **Cross-Platform IO** — Optimized internal file handling to prevent line-ending conflicts (CRLF vs LF) when updating scripts across different operating systems.
+
+> **Coming next — v0.1.6: The Fashionable Update**
+
+---
+
 ## v0.1.4 — *The Install & Auto-Update*
 > Automated deployment system and self-syncing compiler for Linux and Android
 
