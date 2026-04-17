@@ -15,13 +15,13 @@ Do not use the Google Play Store version, as it is outdated.
 Run the following command inside Termux. It will automatically check for Python/Git and set up the `zon` command:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install.sh | bash
 ```
 
 > [!TIP]
 > **Full Installation**: To download examples and documentation along with the compiler:
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install_comple.sh | bash
+> curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_comple.sh | bash
 > ```
 
 ## 2. Keep Zonetic Updated
