@@ -2,7 +2,7 @@
 
 All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
-
+ 
 ---
 ## v0.1.5 — The Install Windows & Auto-Update
 > Full Windows ecosystem support with automated deployment and cross-platform update parity
