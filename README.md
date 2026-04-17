@@ -22,8 +22,8 @@ A statically typed, expression-oriented language designed for robotics.
 
 ## Status
 
-> `v0.1.3` — The CLI Update 2.0 release.  
-> **Coming Soon:** The Closure Update
+> `v0.1.6` — The Fashionable Update release. 
+> **Coming Soon:** Now new updates will go to the VM version -> [here](https://github.com/alve-dev/zonetic-lang-vm)
 
 ## Features
 
@@ -112,4 +112,4 @@ Choose your operating system:
 * **Android:** [Installation Guide for Android](./install_guides/INSTALL_ANDROID.md)
 
 ![Language](https://img.shields.io/badge/written%20in-Python-yellow)
-[![Version](https://img.shields.io/badge/version-0--1--3-orange)](changelog.md)
+[![Version](https://img.shields.io/badge/version-0--1--6-orange)](changelog.md)
