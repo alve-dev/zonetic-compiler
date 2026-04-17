@@ -45,8 +45,18 @@ if [ "$1" == "update" ]; then
 
     echo "[ ⌐■_■] <(\"Update complete! You are now on: $REMOTE_MSG\")" 
     exit 0 
-fi 
+fi
 
+if [ "$1" == "clrhis" ]; then
+    HISTORY_FILE="$HOME/.zonhistoryrepl"
+    if [ -f "$HISTORY_FILE" ]; then
+        : > "$HISTORY_FILE"
+        echo "[ ⌐■_■] <(\"History cleared! Fresh start, bro.\")"
+    else
+        echo "[ X_X] <(\"History file not found, nothing to clear.\")"
+    fi
+    exit 0
+fi
 
 if [ -f "$MAIN_PY" ]; then 
     python3 "$MAIN_PY" "$@" 

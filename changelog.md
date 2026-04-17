@@ -4,7 +4,34 @@ All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
  
 ---
-## v0.1.5 — The Install Windows & Auto-Update
+## v0.1.6 — *The Fashionable Update*
+
+> High-performance UX overhaul, intelligent REPL mechanics, and advanced CLI diagnostics for Linux and Android.
+
+**REPL & Developer Experience (Linux/Termux)**
+
+* **Advanced Line Editing** — Implementation of `GNU Readline` support, enabling horizontal cursor movement (← / →) and standard terminal shortcuts (**Ctrl+L**, **Ctrl+W**, **Ctrl+A/E**).
+* **Persistent Unified History** — Added a 500-line history buffer shared between `REPL mode` and `setfile`. Commands are now stored in `~/.zonhistoryrepl`.
+* **Intelligent Autocomplete** — Integrated a keyword-driven completion engine. The REPL now dynamically pulls keywords directly from the Lexer’s "Single Source of Truth" to provide **TAB** completion (includes `EOF` and `exit()`).
+* **History Maintenance** — Added the `clrhis` command to the launcher. It performs a 0-byte truncation of the history file for a clean privacy reset.
+* **Resilient Initialization** — Automatic creation of history files with built-in `OSError` handling to ensure stability in read-only or restricted environments.
+
+**CLI & Visualization**
+
+* **Pretty Print Diagnostics** — Complete redesign of `zon ast` and `zon tokens`. Outputs now feature enhanced visual hierarchy and formatting for easier debugging of the syntax tree.
+* **Refined Auto-Update** — Fixed critical permission bugs in the Linux/Termux `zon update` flow. The updater now ensures the execution bit (`+x`) is restored post-synchronization.
+* **Unified Core Logic** — Synchronized the execution engine for both interactive and file-based modes, ensuring that UX improvements in the REPL are inherited by `setfile`.
+
+**Technical Fixes**
+
+* **Keyboard Mapping** — Fixed a conflict in `parse_and_bind` that intercepted the 'b' key, restoring standard character input while maintaining Emacs-style control shortcuts.
+* **Environment Parity** — Optimized terminal escape sequences to ensure Linux/Termux performance doesn't conflict with Windows PowerShell's native handling.
+
+> **Coming next** — **v2.0.0**: The dawn of **Zonetic 2**. Transitioning from Tree-walking to a high-performance C++ Virtual Machine based on Registers and > RISC-V architecture.
+
+---
+
+## v0.1.5 — *The Install Windows & Auto-Update*
 > Full Windows ecosystem support with automated deployment and cross-platform update parity
 
 **CLI & Distribution**
@@ -19,8 +46,6 @@ Versions are listed from newest to oldest.
 
 - **PowerShell Execution Policies** — The installer now handles common execution policy restrictions to ensure a smooth one-command installation experience.
 - **Cross-Platform IO** — Optimized internal file handling to prevent line-ending conflicts (CRLF vs LF) when updating scripts across different operating systems.
-
-> **Coming next — v0.1.6: The Fashionable Update**
 
 ---
 
@@ -40,8 +65,6 @@ Versions are listed from newest to oldest.
 
 - **Path Resolution** — Fixed symlink recursion issues in the launcher to correctly locate `main.py` regardless of the execution directory.
 - **Environment Detection** — The installer now automatically detects Termux vs Standard Linux to adjust paths and sudo requirements.
-
-> **Coming next — v0.1.5: The Install Auto Windows Update**
 
 ---
 

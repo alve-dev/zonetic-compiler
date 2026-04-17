@@ -6,41 +6,15 @@ from zonc.location_file import Span
 from zonc.zonc_errors import ErrorCode
 from zonc.location_file import FileMap
 
-class Lexer:
-    _KEYWORDS = {
-        "int": TokenType.KEYWORD_INT,
-        "float": TokenType.KEYWORD_FLOAT,
-        "string": TokenType.KEYWORD_STRING,
-        "bool": TokenType.KEYWORD_BOOL,
-        "mut": TokenType.KEYWORD_MUT,
-        "inmut": TokenType.KEYWORD_INMUT,
-        "if": TokenType.KEYWORD_IF,
-        "elif": TokenType.KEYWORD_ELIF,
-        "else": TokenType.KEYWORD_ELSE,
-        "while": TokenType.KEYWORD_WHILE,
-        "infinity": TokenType.KEYWORD_INFINITY,
-        "continue": TokenType.KEYWORD_CONTINUE,
-        "break": TokenType.KEYWORD_BREAK,
-        "and": TokenType.GATE_AND,
-        "or": TokenType.GATE_OR,
-        "not": TokenType.GATE_NOT,
-        "true" : TokenType.LITERAL_TRUE,
-        "false" : TokenType.LITERAL_FALSE,
-        "give" : TokenType.KEYWORD_GIVE,
-        "func" : TokenType.KEYWORD_FUNC,
-        "void" : TokenType.KEYWORD_VOID,
-        "return" : TokenType.KEYWORD_RETURN,
-        "struct" : TokenType.KEYWORD_STRUCT
-    }
-        
-     
-    def __init__(self, code: str, tokens: ListTokens, diagnostic: DiagnosticEngine, file_map: FileMap) -> None:
+class Lexer: 
+    def __init__(self, code: str, tokens: ListTokens, diagnostic: DiagnosticEngine, file_map: FileMap, keywords: dict) -> None:
         self._code = code
         self._code_len = len(self._code)
         self._position = 0
         self._diagnostic = diagnostic
         self._tokens = tokens
         self._file_map = file_map
+        self.keywords = keywords
         
         
     def _generic_span(self, step: int) -> Span:
@@ -493,10 +467,10 @@ class Lexer:
             
         ident = self._code[start_position : self._position]
         
-        if ident in self._KEYWORDS:
+        if ident in self.keywords:
             self._tokens._add(
                 Token(
-                    self._KEYWORDS[ident],
+                    self.keywords[ident],
                     ident,
                     Span(start_position, self._position, self._file_map)
                     )

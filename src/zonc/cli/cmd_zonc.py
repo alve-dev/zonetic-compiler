@@ -1,6 +1,6 @@
 from zonc.location_file import FileMap
 from zonc.zonc_errors import DiagnosticEngine
-from zonc.scanner import Lexer, ListTokens
+from zonc.scanner import Lexer, ListTokens, TokenType
 from zonc.syntatic_normalizer import TheNormalizer
 from zonc.parser import Parser
 from zonc.semantic import Semantic
@@ -9,11 +9,39 @@ from zonc.utils import print_ast, print_tokens
 import pathlib
 import os
 from zonc.utils import Chronometer
+import readline
+import atexit
 
 if os.name == 'nt':
     CONFIG_FILE = pathlib.Path(os.environ.get('USERPROFILE', pathlib.Path.home())) / ".zonconfig"
 else:
     CONFIG_FILE = pathlib.Path.home() / ".zonconfig"
+    
+KEYWORDS = {
+        "int": TokenType.KEYWORD_INT,
+        "float": TokenType.KEYWORD_FLOAT,
+        "string": TokenType.KEYWORD_STRING,
+        "bool": TokenType.KEYWORD_BOOL,
+        "mut": TokenType.KEYWORD_MUT,
+        "inmut": TokenType.KEYWORD_INMUT,
+        "if": TokenType.KEYWORD_IF,
+        "elif": TokenType.KEYWORD_ELIF,
+        "else": TokenType.KEYWORD_ELSE,
+        "while": TokenType.KEYWORD_WHILE,
+        "infinity": TokenType.KEYWORD_INFINITY,
+        "continue": TokenType.KEYWORD_CONTINUE,
+        "break": TokenType.KEYWORD_BREAK,
+        "and": TokenType.GATE_AND,
+        "or": TokenType.GATE_OR,
+        "not": TokenType.GATE_NOT,
+        "true" : TokenType.LITERAL_TRUE,
+        "false" : TokenType.LITERAL_FALSE,
+        "give" : TokenType.KEYWORD_GIVE,
+        "func" : TokenType.KEYWORD_FUNC,
+        "void" : TokenType.KEYWORD_VOID,
+        "return" : TokenType.KEYWORD_RETURN,
+        "struct" : TokenType.KEYWORD_STRUCT
+    }
 
 def get_target_path(filename):
     local_file = pathlib.Path(filename)
@@ -76,7 +104,7 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
         tokens = ListTokens()
         
         # Lexer
-        lexer = Lexer(code, tokens, diagnostic, file_map)
+        lexer = Lexer(code, tokens, diagnostic, file_map, KEYWORDS)
         tokens = lexer.scan_script()
         
         if diagnostic.has_errors():
@@ -173,7 +201,7 @@ def cmd_zon_version():
     print("         I've officially learned to hop between Android, Linux, and Windows!")
     print("         I’m like a digital nomad, but without the expensive coffee...\")")
     
-def cmd_zon_help(specific_command=None, commands = None):
+def cmd_zon_help(specific_command=None, commands=None):
     if specific_command:
         if specific_command in commands:
             if specific_command == "help":
@@ -261,22 +289,79 @@ def cmd_zon_set_file(args=None, mode=0):
         print(f"[zon info]: Writing to '{target_path.name}'. Type 'EOF' or {short_eof} to save.")
     
     lines = []
-    try:
-        while True:
-            line = input(">> ").rstrip('\r')
-            if line.strip().upper() == "EOF":
-                break
-            lines.append(line)
-    except EOFError:
-        print("\n")
-        pass
+    not_readline = False
+    if os.name != "nt":
+        try:
+            history_file = os.path.expanduser("~/.zonhistoryrepl")
+            if not os.path.exists(history_file):
+                try:
+                    with open(history_file, 'a') as f:
+                        os.utime(history_file, None)
+                except OSError:
+                    print("[ X_X] <(\"Warning: Cannot write to history file. Your session won't be saved.\")")
+                    pass
+                
+            if os.path.exists(history_file):
+                try:
+                    readline.read_history_file(history_file)
+                except FileNotFoundError:
+                    pass
+                
+            readline.set_history_length(500)
+            atexit.register(readline.write_history_file, history_file)
+            readline.parse_and_bind("set editing-mode emacs")
+            keywords = ["EOF"]
+            for key in KEYWORDS:
+                keywords.append(key)
     
-    except KeyboardInterrupt:
-        print("[zon info]: Program execution interrupted.")
-        if mode == 0:
-            print("-- The forge was cooled down too early. The file was not saved.")    
+            def completer(text, state):
+                options = [k for k in keywords if k.startswith(text)]
+                if state < len(options):
+                    return options[state]
+                else:
+                    return None
+
+            readline.set_completer(completer)
+            readline.parse_and_bind("tab: complete")
+            
+            try:
+                while True:
+                    line = input(">> ").rstrip('\r')
+                    if line.strip().upper() == "EOF":
+                        break
+                    lines.append(line)
+                    readline.add_history(line)
+            except EOFError:
+                print("\n")
+                pass
+            
+            except KeyboardInterrupt:
+                print("[zon info]: Program execution interrupted.")
+                if mode == 0:
+                    print("-- The forge was cooled down too early. The file was not saved.")    
+                
+                return
+            
+        except ImportError:
+            not_readline = True
+    
+    if os.name == "nt" or not_readline:
+        try:
+            while True:
+                line = input(">> ").rstrip('\r')
+                if line.strip().upper() == "EOF":
+                    break
+                lines.append(line)
+        except EOFError:
+            print("\n")
+            pass
         
-        return
+        except KeyboardInterrupt:
+            print("[zon info]: Program execution interrupted.")
+            if mode == 0:
+                print("-- The forge was cooled down too early. The file was not saved.")    
+            
+            return
 
     if not lines:
         print("[zon note]: No code entered. Operation cancelled.")
