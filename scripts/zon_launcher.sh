@@ -47,6 +47,7 @@ if [ "$1" == "update" ]; then
     exit 0 
 fi 
 
+
 if [ -f "$MAIN_PY" ]; then 
     python3 "$MAIN_PY" "$@" 
 else 
