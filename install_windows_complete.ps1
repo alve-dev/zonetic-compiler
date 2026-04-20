@@ -10,8 +10,15 @@ function Check-And-Install {
         [string]$PackageId
     )
 
-    if (!(Get-Command $CommandName -ErrorAction SilentlyContinue)) {
-        $input = Read-Host "[ ⌐■_■] <(`"Error: '$CommandName' is missing. Install it now? (y/n)`") "
+    $versionCheck = $null
+    if ($CommandName -eq "g++") {
+        $versionCheck = g++ --version 2>$null
+    } else {
+        $versionCheck = Get-Command $CommandName -ErrorAction SilentlyContinue
+    }
+
+    if (!$versionCheck) {
+        $input = Read-Host "[ ⌐■_■] <(`"Error: '$CommandName' is missing or broken. Install it now? (y/n)`") "
         $answer = $input.ToLower()
 
         if ($answer -ne "y" -and $answer -ne "n") {
@@ -24,32 +31,49 @@ function Check-And-Install {
 
         if ($answer -eq "y") {
             Write-Host "[ ⌐■_■] <(`"Installing '$CommandName' via winget...`")"
-            winget install --exact --id $PackageId --silent --accept-source-agreements --accept-package-agreements | Out-Null
+            winget install --exact --id $PackageId --accept-source-agreements --accept-package-agreements
             
             Refresh-Env
             
-            if ($CommandName -eq "g++" -and !(Get-Command "g++" -ErrorAction SilentlyContinue)) {
-                Write-Host "[ ⌐■_■] <(`"Searching for g++ location...`")"
-                $mingwPath = Get-ChildItem -Path "C:\", "C:\Program Files" -Filter "g++.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty DirectoryName
+            if ($CommandName -eq "g++") {
+                Write-Host "[ ⌐■_■] <(`"Locating GNU compiler...`")"
+                $possiblePaths = @(
+                    "C:\msys64\ucrt64\bin",
+                    "C:\msys64\mingw64\bin",
+                    "C:\Program Files\mingw-w64\*\mingw64\bin"
+                )
+                
+                $mingwPath = $null
+                foreach ($p in $possiblePaths) {
+                    if (Test-Path "$p\g++.exe") { $mingwPath = $p; break }
+                }
+
+                if (!$mingwPath) {
+                    $mingwPath = Get-ChildItem -Path "C:\Program Files" -Filter "g++.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty DirectoryName
+                }
+
                 if ($mingwPath) {
                     $oldPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
                     if ($oldPath -notlike "*$mingwPath*") {
                         [System.Environment]::SetEnvironmentVariable("Path", "$oldPath;$mingwPath", "User")
                         $env:Path += ";$mingwPath"
-                        Write-Host "[ ⌐■_■] <(`"g++ found and added to PATH: $mingwPath`")"
+                        Write-Host "[ ⌐■_■] <(`"g++ linked successfully: $mingwPath`")"
                     }
                 }
             }
         } else {
-            Write-Host "[ X_X] <(`"Error: '$CommandName' is required. Aborting setup.`")" -ForegroundColor Red
+            Write-Host "[ X_X] <(`"Error: '$CommandName' is required. Aborting setup.`")"
+            Pause
             exit 1
         }
+    } else {
+        Write-Host "[ ✓ ] $CommandName is ready." -ForegroundColor Green
     }
 }
 
 Check-And-Install "git" "Git.Git"
 Check-And-Install "python" "Python.Python.3.12"
-Check-And-Install "g++" "GNU.MinGW-w64"
+Check-And-Install "g++" "MSYS2.MSYS2"
 
 $InstallDir = Join-Path $HOME ".zonetic"
 $ZoncDir    = Join-Path $InstallDir ".zonc"
@@ -72,9 +96,9 @@ if (Test-Path $InstallDir) {
 
         if ($choice -eq "y") {
             Write-Host "[ ⌐■_■] <(`"Cleaning directory...`")"
-            Get-ChildItem -Path $InstallDir -Force | Remove-Item -Recurse -Force | Out-Null
+            Remove-Item -Recurse -Force $InstallDir | Out-Null
         } else {
-            Write-Host "[ ⌐■_■] <(`"Installation cancelled by user.`")"
+            Write-Host "[ ⌐■_■] <(`"Installation cancelled.`")"
             exit 0
         }
     }
@@ -85,21 +109,17 @@ New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 
 Write-Host "[ ⌐■_■] <(`"Downloading Zonetic Compiler (Full)...`")"
 Set-Location $ZoncDir
-git init -q
+git init
 try { git remote add origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git 2>$null } catch {}
-git pull origin main -q
-git checkout main -f -q 2>$null
+git pull origin main
 
 Write-Host "[ ⌐■_■] <(`"Downloading Zonetic VM (Full)...`")"
 Set-Location $ZonvmDir
-git init -q
+git init
 try { git remote add origin https://github.com/alve-dev/zonetic-vm.git 2>$null } catch {}
-git pull origin main -q
-git checkout main -f -q 2>$null
+git pull origin main
 
 Set-Location $HOME
-
-Write-Host "[ ⌐■_■] <(`"Configuring 'zon' global command...`")"
 $LauncherPath = Join-Path $ZoncDir "scripts"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -110,6 +130,7 @@ if ($UserPath -notlike "*$LauncherPath*") {
     Write-Host "[ ⌐■_■] <(`"Path already exists. No changes needed.`")"
 }
 
-Write-Host "------------------------------------------------"
-Write-Host "[ ⌐■_■] <(`"Zonetic v2.0.0 COMPLETE installed successfully!`")"
+Write-Host "`n------------------------------------------------"
+Write-Host "[ ⌐■_■] <(`"Zonetic v2.0.0 COMPLETE installed!, use `")"
 Write-Host "[ ⌐■_■] <(`"IMPORTANT: Close and restart PowerShell, then try: zon vw --vers`")"
+Pause
