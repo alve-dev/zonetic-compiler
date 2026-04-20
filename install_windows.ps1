@@ -1,5 +1,10 @@
 Write-Host "[ ⌐■_■] <(`"Starting Zonetic setup for WINDOWS...`")"
 
+# Función para refrescar el PATH en la sesión actual sin cerrar la consola
+function Refresh-Env {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
 function Check-And-Install {
     param (
         [string]$CommandName,
@@ -19,8 +24,25 @@ function Check-And-Install {
         }
 
         if ($answer -eq "y") {
-            Write-Host "[ ⌐■_■] <(`"Installing '$CommandName'...`")"
+            Write-Host "[ ⌐■_■] <(`"Installing '$CommandName' via winget...`")"
             winget install --exact --id $PackageId --silent --accept-source-agreements --accept-package-agreements | Out-Null
+            
+            # Refrescar variables después de instalar
+            Refresh-Env
+            
+            # Caso especial para MinGW: A veces winget no añade el /bin al PATH
+            if ($CommandName -eq "g++" -and !(Get-Command "g++" -ErrorAction SilentlyContinue)) {
+                Write-Host "[ ⌐■_■] <(`"Searching for g++ location...`")"
+                $mingwPath = Get-ChildItem -Path "C:\", "C:\Program Files" -Filter "g++.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty DirectoryName
+                if ($mingwPath) {
+                    $oldPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+                    if ($oldPath -notlike "*$mingwPath*") {
+                        [System.Environment]::SetEnvironmentVariable("Path", "$oldPath;$mingwPath", "User")
+                        $env:Path += ";$mingwPath"
+                        Write-Host "[ ⌐■_■] <(`"g++ found and added to PATH: $mingwPath`")"
+                    }
+                }
+            }
         } else {
             Write-Host "[ X_X] <(`"Error: '$CommandName' is required. Aborting setup.`")" -ForegroundColor Red
             exit 1
@@ -28,13 +50,15 @@ function Check-And-Install {
     }
 }
 
+# Verificaciones iniciales
 Check-And-Install "git" "Git.Git"
 Check-And-Install "python" "Python.Python.3.12"
 Check-And-Install "g++" "GNU.MinGW-w64"
 
-$InstallDir = "$HOME\.zonetic"
-$ZoncDir = "$InstallDir\.zonc"
-$ZonvmDir = "$InstallDir\.zonvm"
+# Definir rutas absolutas para evitar errores de contexto
+$InstallDir = Join-Path $HOME ".zonetic"
+$ZoncDir    = Join-Path $InstallDir ".zonc"
+$ZonvmDir   = Join-Path $InstallDir ".zonvm"
 
 if (Test-Path $InstallDir) {
     $FileCount = (Get-ChildItem -Path $InstallDir -Force).Count
@@ -67,7 +91,7 @@ New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 Write-Host "[ ⌐■_■] <(`"Syncing Compiler (Zonc) with GitHub...`")"
 Set-Location $ZoncDir
 git init -q
-try { git remote add origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git 2>$null } catch {}
+try { git remote add origin https://github.com 2>$null } catch {}
 git config core.sparseCheckout true
 "src/zonc/*" | Out-File -FilePath ".git/info/sparse-checkout" -Encoding utf8
 "scripts/*" | Add-Content -Path ".git/info/sparse-checkout"
@@ -77,11 +101,11 @@ git pull origin main --rebase -q 2>$null
 Write-Host "[ ⌐■_■] <(`"Syncing VM (ZonVM) with GitHub...`")"
 Set-Location $ZonvmDir
 git init -q
-try { git remote add origin https://github.com/alve-dev/zonetic-vm.git 2>$null } catch {}
+try { git remote add origin https://github.com 2>$null } catch {}
 git pull origin main -q 2>$null
 
 Write-Host "[ ⌐■_■] <(`"Configuring 'zon' global command...`")"
-$LauncherPath = "$ZoncDir\scripts"
+$LauncherPath = Join-Path $ZoncDir "scripts"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 if ($UserPath -notlike "*$LauncherPath*") {
