@@ -91,7 +91,7 @@ New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 Write-Host "[ ⌐■_■] <(`"Syncing Compiler (Zonc) with GitHub...`")"
 Set-Location $ZoncDir
 git init -q
-try { git remote add origin https://github.com 2>$null } catch {}
+try { git remote add origin https://github.com/alve-dev/zonetic-compiler/tree/main 2>$null } catch {}
 git config core.sparseCheckout true
 "src/zonc/*" | Out-File -FilePath ".git/info/sparse-checkout" -Encoding utf8
 "scripts/*" | Add-Content -Path ".git/info/sparse-checkout"
@@ -101,7 +101,7 @@ git pull origin main --rebase -q 2>$null
 Write-Host "[ ⌐■_■] <(`"Syncing VM (ZonVM) with GitHub...`")"
 Set-Location $ZonvmDir
 git init -q
-try { git remote add origin https://github.com 2>$null } catch {}
+try { git remote add origin https://github.com/alve-dev/zonetic-vm 2>$null } catch {}
 git pull origin main -q 2>$null
 
 Write-Host "[ ⌐■_■] <(`"Configuring 'zon' global command...`")"
