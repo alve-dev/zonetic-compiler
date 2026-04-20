@@ -1,20 +1,25 @@
 # Zonetic Installation Guide (Windows)
 
-Follow these steps to configure the Zonetic CLI on Windows. This process uses a PowerShell script to automate dependency checks, directory setup, and environment variables.
+Follow these steps to configure the Zonetic CLI on Windows. This process includes setting up the C++ compiler and using a PowerShell script to automate the environment.
 
-## 1. Prerequisites
+## 1. Critical Prerequisite: C++ Compiler (g++)
 
-You must have **Git** and **Python 3** installed. 
-Verify them by running these commands in PowerShell:
+Zonetic requires a C++ compiler to function. Windows does not include one by default. **Follow these two steps exactly:**
 
+1. **Install MSYS2:** Open PowerShell as **Administrator** and run:
 ```powershell
-git --version
-python --version
+winget install --id MSYS2.MSYS2 --exact
 ```
+
+2. **Install GCC:** Search for "**MSYS2 MSYS**" in your Start Menu, open it, and paste this command:
+```bash
+pacman -S mingw-w64-ucrt-x86_64-gcc
+```
+*(Type 'Y' and press Enter when prompted to confirm).*
 
 ## 2. Quick Installation (Automated)
 
-Open **PowerShell** and run the following command. This will download and execute the installer, setting up Zonetic in `~/.zonetic` and configuring the global `zon` command:
+Once the compiler is installed, open **PowerShell** and run the installer. This will set up Zonetic in `~/.zonetic` and configure the global `zon` command:
 
 ```powershell
 irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows.ps1 | iex
@@ -31,25 +36,12 @@ To download the entire repository, including `examples/` and `docs/`:
 irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows_complete.ps1 | iex
 ```
 
-## 4. Keep Zonetic Updated
-
-Updating is now a built-in feature. No more manual downloads:
-
-```bash
-zon update
-```
-
-## 5. Verify Installation
-
-Check if Zonny is active:
-
-```bash
-zon vers
-```
-
 ---
 
 ## Troubleshooting
+
+### 'g++' is not recognized
+If you installed MSYS2 but the script still can't find `g++`, ensure you ran the `pacman` command in Step 1. The Zonetic installer will attempt to link `C:\msys64\ucrt64\bin` to your Path automatically.
 
 ### Script Execution Error
 If Windows blocks the installer, run this command once to allow local scripts, then try the installation again:
@@ -59,32 +51,17 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ### 'zon' is not recognized
 1. **Restart PowerShell:** This is mandatory.
-2. **Manual Check:** Ensure `$HOME\.zonetic\scripts` is in your Environment Variables Path.
+2. **Manual Check:** Ensure `$HOME\.zonetic\.zonc\scripts` is in your Environment Variables Path.
 
-## Uninstallation
+---
 
-To remove Zonetic completely:
+## Quick Start
 
-```powershell
-# Delete the folder
-Remove-Item -Recurse -Force "$HOME\.zonetic"
-# Remember to manually remove the entry from your Environment Variables Path.
-```
-
-## Quick Start: REPL Mode
-
-How to use `zon repl`:
-
-1. **Enter the REPL**:
-   ```powershell
-   zon repl
-   ```
-2. **Execute**: Type `EOF` on a new line or press `Ctrl+Z and Enter`.
+* **Verify Version:** `zon vw --vers`
+* **Update Zonetic:** `zon update`
+* **REPL Mode:** `zon repl` (Type `EOF` on a new line to execute).
 
 ```powershell
->> print("Zonetic on Windows is alive!")
+>> print("Zonetic is alive!")
 >> EOF
 ```
-
-> [!TIP]
-> This mode is perfect for testing logic or syntax quickly. Once the output is displayed, the temporary environment is wiped clean.
