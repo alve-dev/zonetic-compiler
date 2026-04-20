@@ -100,7 +100,7 @@ git checkout main -q 2>$null
 Write-Host "[ ⌐■_■] <(`"Syncing VM (ZonVM) with GitHub...`")"
 Set-Location $ZonvmDir
 git init -q
-try { git remote add origin https://github.com 2>$null } catch {}
+try { git remote add origin https://github.com/alve-dev/zonetic-vm 2>$null } catch {}
 git pull origin main -q
 Set-Location $HOME
 
