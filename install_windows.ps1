@@ -1,3 +1,8 @@
+if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
+
 Write-Host "[ ⌐■_■] <(`"Starting Zonetic setup for WINDOWS...`")"
 
 function Refresh-Env {
@@ -10,14 +15,17 @@ function Check-And-Install {
         [string]$PackageId
     )
 
-    $versionCheck = $null
-    if ($CommandName -eq "g++") {
-        $versionCheck = g++ --version 2>$null
-    } else {
-        $versionCheck = Get-Command $CommandName -ErrorAction SilentlyContinue
+    $cmdExists = Get-Command $CommandName -ErrorAction SilentlyContinue
+    $working = $false
+    if ($cmdExists) {
+        if ($CommandName -eq "g++") {
+            $working = g++ --version 2>$null
+        } else {
+            $working = $true
+        }
     }
 
-    if (!$versionCheck) {
+    if (!$working) {
         $input = Read-Host "[ ⌐■_■] <(`"Error: '$CommandName' is missing or broken. Install it now? (y/n)`") "
         $answer = $input.ToLower()
 
@@ -31,28 +39,19 @@ function Check-And-Install {
 
         if ($answer -eq "y") {
             Write-Host "[ ⌐■_■] <(`"Installing '$CommandName' via winget...`")"
-            winget install --exact --id $PackageId --silent --accept-source-agreements --accept-package-agreements | Out-Null
+            winget install --exact --id $PackageId --silent --accept-source-agreements --accept-package-agreements
             
             Refresh-Env
             
-            if ($CommandName -eq "g++") {
-                Write-Host "[ ⌐■_■] <(`"Locating GNU compiler...`")"
-                $possiblePaths = @(
-                    "C:\msys64\mingw64\bin",
-                    "C:\msys64\ucrt64\bin",
-                    "C:\Program Files\mingw-w64\*\mingw64\bin"
-                )
+            if ($PackageId -eq "MSYS2.MSYS2") {
+                Write-Host "[ ⌐■_■] <(`"Bootstrapping GCC 15 via MSYS2 (this takes a moment)...`")"
+                $bashPath = "C:\msys64\usr\bin\bash.exe"
+                if (Test-Path $bashPath) {
+                    Start-Process $bashPath -ArgumentList "-lc 'pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc'" -Wait
+                }
                 
-                $mingwPath = $null
-                foreach ($p in $possiblePaths) {
-                    if (Test-Path "$p\g++.exe") { $mingwPath = $p; break }
-                }
-
-                if (!$mingwPath) {
-                    $mingwPath = Get-ChildItem -Path "C:\Program Files" -Filter "g++.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty DirectoryName
-                }
-
-                if ($mingwPath) {
+                $mingwPath = "C:\msys64\ucrt64\bin"
+                if (Test-Path $mingwPath) {
                     $oldPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
                     if ($oldPath -notlike "*$mingwPath*") {
                         [System.Environment]::SetEnvironmentVariable("Path", "$oldPath;$mingwPath", "User")
@@ -70,7 +69,7 @@ function Check-And-Install {
 
 Check-And-Install "git" "Git.Git"
 Check-And-Install "python" "Python.Python.3.12"
-Check-And-Install "g++" "GNU.MinGW-w64"
+Check-And-Install "g++" "MSYS2.MSYS2"
 
 $InstallDir = Join-Path $HOME ".zonetic"
 $ZoncDir    = Join-Path $InstallDir ".zonc"
@@ -132,8 +131,6 @@ $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$LauncherPath*") {
     [Environment]::SetEnvironmentVariable("Path", "$UserPath;$LauncherPath", "User")
     Write-Host "[ ⌐■_■] <(`"Path updated successfully!`")"
-} else {
-    Write-Host "[ ⌐■_■] <(`"Path already exists. No changes needed.`")"
 }
 
 Write-Host "------------------------------------------------"
