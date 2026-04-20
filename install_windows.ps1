@@ -31,15 +31,15 @@ function Check-And-Install {
 
         if ($answer -eq "y") {
             Write-Host "[ ⌐■_■] <(`"Installing '$CommandName' via winget...`")"
-            winget install --exact --id $PackageId --silent --accept-source-agreements --accept-package-agreements | Out-Null
+            winget install --exact --id $PackageId --accept-source-agreements --accept-package-agreements
             
             Refresh-Env
             
             if ($CommandName -eq "g++") {
                 Write-Host "[ ⌐■_■] <(`"Locating GNU compiler...`")"
                 $possiblePaths = @(
-                    "C:\msys64\mingw64\bin",
                     "C:\msys64\ucrt64\bin",
+                    "C:\msys64\mingw64\bin",
                     "C:\Program Files\mingw-w64\*\mingw64\bin"
                 )
                 
@@ -62,15 +62,18 @@ function Check-And-Install {
                 }
             }
         } else {
-            Write-Host "[ X_X] <(`"Error: '$CommandName' is required. Aborting setup.`")" -ForegroundColor Red
+            Write-Host "[ X_X] <(`"Error: '$CommandName' is required. Aborting setup.`")"
+            Pause
             exit 1
         }
+    } else {
+       Write-Host "[ ✓ ] $CommandName is ready." -ForegroundColor Green
     }
 }
 
 Check-And-Install "git" "Git.Git"
 Check-And-Install "python" "Python.Python.3.12"
-Check-And-Install "g++" "GNU.MinGW-w64"
+Check-And-Install "g++" "MSYS2.MSYS2"
 
 $InstallDir = Join-Path $HOME ".zonetic"
 $ZoncDir    = Join-Path $InstallDir ".zonc"
@@ -93,9 +96,9 @@ if (Test-Path $InstallDir) {
 
         if ($choice -eq "y") {
             Write-Host "[ ⌐■_■] <(`"Cleaning directory...`")"
-            Get-ChildItem -Path $InstallDir -Force | Remove-Item -Recurse -Force | Out-Null
+            Remove-Item -Recurse -Force $InstallDir | Out-Null
         } else {
-            Write-Host "[ ⌐■_■] <(`"Installation cancelled by user.`")"
+            Write-Host "[ ⌐■_■] <(`"Installation cancelled.`")"
             exit 0
         }
     }
@@ -106,7 +109,7 @@ New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 
 Write-Host "[ ⌐■_■] <(`"Syncing Compiler (Zonc) with GitHub...`")"
 Set-Location $ZoncDir
-git init -q
+git init
 try { git remote add origin https://github.com/alve-dev/zonetic-lang-tree-walker-version.git 2>$null } catch {}
 
 git config core.sparseCheckout true
@@ -115,17 +118,16 @@ if (!(Test-Path ".git/info")) { New-Item -ItemType Directory -Path ".git/info" -
 "scripts/*" | Add-Content -Path ".git/info/sparse-checkout"
 ".gitignore" | Add-Content -Path ".git/info/sparse-checkout"
 
-git pull origin main -q
-git checkout main -q 2>$null
+git pull origin main
+git checkout main 2>$null
 
 Write-Host "[ ⌐■_■] <(`"Syncing VM (ZonVM) with GitHub...`")"
 Set-Location $ZonvmDir
-git init -q
-try { git remote add origin https://github.com/alve-dev/zonetic-vm 2>$null } catch {}
-git pull origin main -q
-Set-Location $HOME
+git init
+try { git remote add origin https://github.com/alve-dev/zonetic-vm.git 2>$null } catch {}
+git pull origin main
 
-Write-Host "[ ⌐■_■] <(`"Configuring 'zon' global command...`")"
+Set-Location $HOME
 $LauncherPath = Join-Path $ZoncDir "scripts"
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -136,6 +138,7 @@ if ($UserPath -notlike "*$LauncherPath*") {
     Write-Host "[ ⌐■_■] <(`"Path already exists. No changes needed.`")"
 }
 
-Write-Host "------------------------------------------------"
+Write-Host "`n------------------------------------------------"
 Write-Host "[ ⌐■_■] <(`"Zonetic v2.0.0 installed successfully!`")"
-Write-Host "[ ⌐■_■] <(`"IMPORTANT: Close and restart PowerShell, then try: zon vw --vers`")"
+Write-Host "[ ⌐■_■] <(`"IMPORTANT: Close and restart PowerShell, then try: zon vers`")"
+Pause
