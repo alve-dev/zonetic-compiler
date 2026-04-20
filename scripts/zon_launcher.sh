@@ -34,6 +34,9 @@ build_vm_if_needed() {
 
 if [ "$1" == "update" ]; then 
     echo "[ ⌐■_■] <(\"Checking for updates on GitHub...\")" 
+    
+    UPDATED=false
+
     if [ -d "$ZONC_DIR/.git" ]; then 
         git -C "$ZONC_DIR" fetch origin main -q 
         REMOTE_MSG=$(git -C "$ZONC_DIR" log -1 origin/main --pretty=format:%s) 
@@ -43,16 +46,24 @@ if [ "$1" == "update" ]; then
             git -C "$ZONC_DIR" reset --hard origin/main -q 
             chmod +x "$LAUNCHER_FILE"
             echo "[ ⌐■_■] <(\"Compiler updated: $REMOTE_MSG\")" 
+            UPDATED=true
         else
             echo "[ ⌐■_■] <(\"Compiler is already up to date.\")"
         fi
-    fi 
+    fi
 
     if [ -d "$VM_DIR/.git" ]; then
         git -C "$VM_DIR" fetch origin main -q
-        git -C "$VM_DIR" reset --hard origin/main -q
-        rm -f "$BINARY_VM"
-        echo "[ ⌐■_■] <(\"VM updated and marked for rebuild.\")"
+        VM_REMOTE=$(git -C "$VM_DIR" log -1 origin/main --pretty=format:%H)
+        VM_LOCAL=$(git -C "$VM_DIR" log -1 --pretty=format:%H)
+
+        if [[ "$UPDATED" == true || "$VM_REMOTE" != "$VM_LOCAL" ]]; then
+            git -C "$VM_DIR" reset --hard origin/main -q
+            rm -f "$BINARY_VM"
+            echo "[ ⌐■_■] <(\"VM synchronized and marked for rebuild.\")"
+        else
+            echo "[ ⌐■_■] <(\"VM is already up to date.\")"
+        fi
     fi
 
     exit 0 

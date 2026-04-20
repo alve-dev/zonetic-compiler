@@ -26,6 +26,7 @@ function Build-VmIfNeeded {
 
 if ($args[0] -eq "update") {
     Write-Host "[ ⌐■_■] <(`"Checking for updates on GitHub...`")"
+    $Updated = $false
     
     if (Test-Path "$ZoncDir\.git") {
         git -C "$ZoncDir" fetch origin main -q
@@ -35,6 +36,7 @@ if ($args[0] -eq "update") {
         if ($RemoteMsg -notlike "*[NOSTABLE]*" -and $RemoteMsg -ne $LocalMsg) {
             git -C "$ZoncDir" reset --hard origin/main -q
             Write-Host "[ ⌐■_■] <(`"Compiler updated: $RemoteMsg`")"
+            $Updated = $true
         } else {
             Write-Host "[ ⌐■_■] <(`"Compiler is already up to date.`")"
         }
@@ -42,9 +44,16 @@ if ($args[0] -eq "update") {
 
     if (Test-Path "$VmDir\.git") {
         git -C "$VmDir" fetch origin main -q
-        git -C "$VmDir" reset --hard origin/main -q
-        if (Test-Path $BinaryVm) { Remove-Item $BinaryVm }
-        Write-Host "[ ⌐■_■] <(`"VM updated and marked for rebuild.`")"
+        $VmRemote = git -C "$VmDir" log -1 origin/main --pretty=format:%H
+        $VmLocal = git -C "$VmDir" log -1 --pretty=format:%H
+
+        if ($Updated -eq $true -or $VmRemote -ne $VmLocal) {
+            git -C "$VmDir" reset --hard origin/main -q
+            if (Test-Path $BinaryVm) { Remove-Item $BinaryVm -Force }
+            Write-Host "[ ⌐■_■] <(`"VM synchronized and marked for rebuild.`")"
+        } else {
+            Write-Host "[ ⌐■_■] <(`"VM is already up to date.`")"
+        }
     }
     exit 0
 }
