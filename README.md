@@ -18,14 +18,14 @@ A statically typed, expression-oriented language designed for robotics and perfo
 
 ## Status
 
-> **Current Version:** `v2.0.0` — *The First Step To VM 2.0.0* > **Next Milestone:** `v2.1.0` — *TBD*
+> **Current Version:** `v2.1.0` — *The Ascension Logic Update* > **Next Milestone:** `v2.2.0` — *The 64 bits Update*
 
 ## Features
 
 - **Bytecode Compilation:** Compiles high-level code into optimized binary instructions for ZonVM.
 - **Hybrid Execution:** Integrated REPL with support for both Bytecode VM and Legacy Interpreter (`--in` mode).
 - **Explicit mutability** with `mut` / `inmut`.
-- **Form-based control flow** — `if form`, `while form`, `infinity form`.
+- **Form-based control flow** — `if form`, `while form`, `infinity form`, `func form`.
 - **Rust-inspired error reporting** with source spans and Zonny.
 - **Register-based ABI:** Sophisticated register management (Saved vs. Temporals).
 - **Type inference** and strict numeric formatting (`1_000_000`).

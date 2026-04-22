@@ -130,6 +130,13 @@ COMMANDS = {
         ]
     ),
     
+    "rebuild" : CmdInfo(
+        area="rebuild",
+        summary="Recompile the virtual machine",
+        usage="zon rebuild",
+        category="manag"
+    ),
+    
     "update": CmdInfo(
         area="update",
         summary="Sync and update the entire ecosystem to the latest version.",

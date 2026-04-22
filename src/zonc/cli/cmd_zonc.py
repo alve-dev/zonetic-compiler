@@ -154,6 +154,7 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
             diagnostic.clear_engine()
             return
         
+        
         chrono_compiler.stop()
             
         # Interpreter
@@ -257,7 +258,6 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
         diagnostic.display()
         diagnostic.clear_engine()
         return
-    
     # Parser
     parser = Parser(tokens, diagnostic, file_map)
     root_node = parser.parse_program(name_file)
@@ -279,7 +279,11 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
     em = Emitter()
     for stmt in root_node.stmts:
         em.generate_stmt(stmt)
-    em.emit_halt()
+        
+    # emitir halt por ecall, con numero 10 en registro 17 que es exit
+    em.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 10)
+    em.emit_ecall()
+    
     if direct_zbc is None:
         em.save(path_name.with_suffix(".zbc"))
     else:
@@ -407,10 +411,10 @@ def cmd_zon_set_file(args=None, mode=0):
         short_eof = "Ctrl+D"
         
     endkey = ""
-    if mode in [0, 1]:
+    if mode in [0, 4, 3]:
         endkey = args[1]
     else:
-        endkey = args[1]
+        endkey = args[0]
     
     if mode in [1, 3]:    
         print(f"[zon info]: Repl Mode. Type '{endkey}' or {short_eof} to end.")

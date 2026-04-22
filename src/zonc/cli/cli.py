@@ -74,6 +74,7 @@ def run_cli():
                 return
             
             keyend = args[3:]
+            print(keyend)
             if len(keyend) < 1:
                 cmd_zon_set_file([args[2], "EOF"], 4)
             else:
@@ -162,8 +163,6 @@ def run_cli():
             else:
                 cmd_zon_set_file(args[1:3], mode=3)
                 
-        
-         
     else:
         list_commands = []
         for key in COMMANDS:
