@@ -265,6 +265,10 @@ class Parser:
                 
         elif self.check(TokenType.SEMICOLON):
             return declarations
+        
+        elif self.check(TokenType.LBRACE):
+            return declarations
+        
         else:
             token = self.tokens._peek(self.position)
             if token._type == TokenType.EOF:

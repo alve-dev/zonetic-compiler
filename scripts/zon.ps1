@@ -15,7 +15,7 @@ function Build-VmIfNeeded {
             exit 1
         }
         
-        g++ -std=c++20 -I"$IncludeVmDir" "$SrcVmDir\*.cpp" -o "$BinaryVm"
+        g++ -g -std=c++20 -I"$IncludeVmDir" "$SrcVmDir\*.cpp" -o "$BinaryVm"
         
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ X_X] <(`"Error: Failed to build VM.`")" -ForegroundColor Red
@@ -145,6 +145,19 @@ if ($args[0] -eq "st" -and $args[1] -eq "--zbc") {
             Build-VmIfNeeded
             & "$BinaryVm" "$TargetPath"
         }
+    }
+    exit 0
+}
+
+if ($args[0] -eq "rebuild") {
+    Write-Host "[ ⌐■_■] <(`"Forcing VM rebuild...`")"
+    if (Test-Path $BinaryVm) { 
+        Remove-Item $BinaryVm -Force 
+        Write-Host "[ ⌐■_■] <(`"Old binary removed.`")"
+    }
+    Build-VmIfNeeded
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[ ⌐■_■] <(`"VM rebuilt successfully!`")"
     }
     exit 0
 }

@@ -4,6 +4,38 @@ All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
 ---
+## v2.1.0 — *The Ascension Logic Update*
+
+> This version marks the transition from linear execution to complex decision-making. By implementing conditional branching, short-circuit logic, and a refined scope architecture, Zonetic attains a new level of computational "cultivation."
+
+**Logic & Control Flow (The Decision Path)**
+
+* **Conditional Branching (B-Type)** — Full support for `if`, `elif`, and `else` structures using native RISC-V branches: `BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, and `BGEU`.
+* **Iterative Cultivation (Loops)** — Implementation of `while` loops with backward-jumping offsets for repetitive execution.
+* **J-Type Instructions** — Added `JAL` (Jump and Link) and `JALR` for unconditional jumps and future function call support, providing a wider jumping range than standard branches.
+* **Short-Circuit Evaluation** — The Emitter now generates optimized jump-based logic for `and` and `or` operators, avoiding unnecessary computations.
+
+**Refactored Register & Scope Management**
+
+* **Symbol Manager Integration** — A new specialized component that handles `Saved Registers` (s0-s11), ensuring precise variable persistence across scopes.
+* **Temporal Isolation** — The `Register Manager` has been optimized to focus exclusively on `Temporary Registers` (t0-t6), improving allocation speed during expression evaluation.
+* **Block Expression Support** — Introduction of `BlockExpr` logic, allowing scoped execution where local variables are automatically managed and registers are freed upon block exit.
+
+**Expanded Instruction Set (ISA)**
+
+* **Boolean & Bitwise Mastery** — Added logical instructions for both register and immediate forms: `AND`, `ANDI`, `OR`, `ORI`, `XOR`, and `XORI`.
+* **Comparison Operations** — Implementation of `SLT` (Set Less Than) and its variants (`SLTI`, `SLTU`, `SLTUI`) to transform comparisons into boolean values (0 or 1) when needed.
+
+**CLI & Developer Experience**
+
+* **The `zon rebuild` Command** — Added a dedicated automation command to recompile the C++ Virtual Machine source code instantly. This streamlines the development cycle when modifying the VM's core.
+* **Enhanced Debugging** — Improved VM output to track jump offsets and label resolutions during execution.
+
+**Internal Refactoring**
+
+* **Dual-Pass Label Resolution** — The Bytecodegen now performs a more robust label resolution to calculate precise relative offsets for B-Type and J-Type instructions.
+* **Register-Symbol Decoupling** — Complete separation between variable storage and intermediate calculation logic for a more "real-world" compiler architecture.
+---
 
 ## v2.0.0 — *The First Step To VM*
 
