@@ -112,6 +112,61 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
                write the decimal digits without any separators.")"""
     ),
     
+    ErrorCode.E0009 : ErrorDefinition(
+      error_code=ErrorCode.E0009,
+      severity=Severity.ERROR,
+      message="`_` is not a valid identifier name.",
+      note="""
+      In Zonetic, while an identifier can start with `_`, it cannot 
+      consist of only underscores. This is to ensure all variables 
+      have a meaningful name for better code readability.""",
+      zonny="""
+      [ o_0] <("A single `_`? That's not a name, that's just a 
+               placeholder! Give your variable a real name so 
+               I know what it represents in your robot.")"""
+    ),
+    
+    ErrorCode.E0010 : ErrorDefinition(
+      error_code=ErrorCode.E0010,
+      severity=Severity.ERROR,
+      message="Scientific notation requires an exponent, but I found none.",
+      note="""
+      In Zonetic, when you use `e` or `E` for scientific notation, 
+      you must follow it with an integer exponent (like `10e2` for 1000.0).""",
+      zonny="""
+      [ o_0] <("You started a scientific notation but left the 
+               power hanging! Tell me the exponent, or if 
+               you didn't mean to use it, just remove the `e/E`.")"""
+    ),
+    
+    ErrorCode.E0011 : ErrorDefinition(
+      error_code=ErrorCode.E0011,
+      severity=Severity.ERROR,
+      message="Exponents in scientific notation must be whole numbers.",
+      note="""
+      In Zonetic, the exponent (the part after the `e/E`) must be a 
+      signed integer. Decimal points belong in the first part 
+      of the number, not in the power.""",
+      zonny="""
+      [ ~_~] <("Whoa! Exponents are simple counters — they can't 
+               have dots in them. Use a whole number after 
+               the `e/E` and put the decimals in the first part.")"""
+    ),
+    
+    ErrorCode.E0012 : ErrorDefinition(
+      error_code=ErrorCode.E0012,
+      severity=Severity.ERROR,
+      message="Invalid character in scientific notation exponent.",
+      note="""
+      In Zonetic, the exponent part can only contain digits (0-9). 
+      Symbols like `_` or extra letters are not allowed inside 
+      the power for clarity.""",
+      zonny="""
+      [ >_<] <("Keep the exponent clean! Just use plain digits 
+               after the `e/E`. No underscores, no letters, 
+               just pure power!")"""
+    ),
+    
     ErrorCode.E1001 : ErrorDefinition(
         error_code=ErrorCode.E1001,
         severity=Severity.ERROR,
@@ -1252,6 +1307,93 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
       [ x_x] <("I just kept going and going and I ran out of stack. 
                Add a base case so it knows when to stop — 
                or raise --max-depth if you're sure 200 isn't enough.")"""
+    ),
+    
+    ErrorCode.E5001 : ErrorDefinition(
+      error_code=ErrorCode.E5001,
+      severity=Severity.ERROR,
+      message="Division by zero detected during compilation.",
+      note="""
+      In Zonetic, division by zero is undefined for integer types. 
+      Since both operands are constants, I can calculate this now 
+      and prevent your program from crashing later.""",
+      zonny="""
+      [ 0_0] <("Nice try! I saw that zero from a mile away. 
+               Constant folding doesn't just make things faster, 
+               it also catches your math crimes. Don't make me 
+               divide by zero, I'm a compiler, not a philosopher.")"""
+    ),
+    
+    ErrorCode.E5002 : ErrorDefinition(
+      error_code=ErrorCode.E5002,
+      severity=Severity.ERROR,
+      message="Constant operation results in Infinity.",
+      note="""
+      In Zonetic, dividing a `double` by zero is allowed by the IEEE 754 standard,
+      resulting in `{inf}`. However, I'm letting you know because this usually 
+      leads to unpredictable behavior in robotic sensors.""",
+      zonny="""
+      [ o_0] <("Infinity? That's a lot of distance for a robot to cover. 
+               I'll let it pass because it's a `double`, but are you 
+               sure you want your variables touching the stars?")"""
+    ),
+    
+    ErrorCode.E5003 : ErrorDefinition(
+      error_code=ErrorCode.E5003,
+      severity=Severity.ERROR,
+      message="Constant operation results in NaN (Not a Number)",
+      note="""
+      In Zonetic, this operation results in `NaN`. While floating-point 
+      math allows it, `NaN` values are contagious and will ruin any 
+      calculation or sensor reading they touch.""",
+      zonny="""
+      [ x_o] <("Zero divided by zero? You just broke math. 
+               I'm giving you a `NaN`, but don't expect me to 
+               know what to do with it later. It's not a number, 
+               it's a headache for your robot.")"""
+    ),
+    
+    ErrorCode.E5004 : ErrorDefinition(
+      error_code=ErrorCode.E5004,
+      severity=Severity.ERROR,
+      message="Integer overflow detected during constant folding.",
+      note="""
+      In Zonetic, `{type_int}` has a fixed capacity. The result of this 
+      operation exceeds the maximum value of approximately {magnitud}.""",
+      zonny="""
+      [ >_<] <("Whoa! That's a massive number. My `{type_int}` storage 
+               is sweating just looking at it. I can't fit 
+               more than {magnitud} in there!")"""
+    ),
+    
+    ErrorCode.E5005 : ErrorDefinition(
+      error_code=ErrorCode.E5005,
+      severity=Severity.ERROR,
+      message="Floating-point overflow detected during constant folding.",
+      note="""
+      In Zonetic, `{target_type}` follows the IEEE 754 standard. 
+      The maximum representable value is approximately {max_val}.
+      Anything beyond this limit results in `{inf}`.""",
+      zonny="""
+      [ >_<] <("Whoa! That's too much for a `{target_type}`. 
+               I can't track a number that big without 
+               losing my mind and just calling it `{inf}`. 
+               Check your exponents!")"""
+    ),
+    
+    ErrorCode.W5001 : ErrorDefinition(
+      error_code=ErrorCode.W5001,
+      severity=Severity.WARNING,
+      message="Floating-point underflow detected during constant folding.",
+      note="""
+      In Zonetic, `{target_type}` cannot accurately represent values smaller 
+      than approximately {min_val}. To prevent unstable calculations, 
+      I will treat this result as `0.0`.""",
+      zonny="""
+      [ ._.] <("That number is microscopic! It's too small for a 
+               `{target_type}` to track, so I'm rounding it to `0.0`. 
+               Be careful, vanishing decimals can make robot 
+               sensors do very strange things!")"""
     ),
 }
 

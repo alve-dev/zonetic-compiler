@@ -15,7 +15,7 @@ function Build-VmIfNeeded {
             exit 1
         }
         
-        g++ -std=c++20 -I"$IncludeVmDir" "$SrcVmDir\*.cpp" -o "$BinaryVm"
+        g++ -g -std=c++20 -I"$IncludeVmDir" "$SrcVmDir\*.cpp" -o "$BinaryVm"
         
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ X_X] <(`"Error: Failed to build VM.`")" -ForegroundColor Red
@@ -27,11 +27,11 @@ function Build-VmIfNeeded {
 if ($args[0] -eq "update") {
     Write-Host "[ ⌐■_■] <(`"Checking for updates on GitHub...`")"
     $Updated = $false
-    
+
     if (Test-Path "$ZoncDir\.git") {
         git -C "$ZoncDir" fetch origin main -q
-        $RemoteMsg = git -C "$ZoncDir" log -1 origin/main --pretty=format:%s
-        $LocalMsg = git -C "$ZoncDir" log -1 --pretty=format:%s
+        $RemoteMsg = ([string](git -C "$ZoncDir" log -1 origin/main --pretty=format:%s)).Trim()
+        $LocalMsg = ([string](git -C "$ZoncDir" log -1 --pretty=format:%s)).Trim()
 
         if ($RemoteMsg -notlike "*[NOSTABLE]*" -and $RemoteMsg -ne $LocalMsg) {
             git -C "$ZoncDir" reset --hard origin/main -q
@@ -44,12 +44,17 @@ if ($args[0] -eq "update") {
 
     if (Test-Path "$VmDir\.git") {
         git -C "$VmDir" fetch origin main -q
-        $VmRemote = git -C "$VmDir" log -1 origin/main --pretty=format:%H
-        $VmLocal = git -C "$VmDir" log -1 --pretty=format:%H
+        $VmRemote = ([string](git -C "$VmDir" log -1 origin/main --pretty=format:%H)).Trim()
+        $VmLocal = ([string](git -C "$VmDir" log -1 --pretty=format:%H)).Trim()
 
         if ($Updated -eq $true -or $VmRemote -ne $VmLocal) {
             git -C "$VmDir" reset --hard origin/main -q
-            if (Test-Path $BinaryVm) { Remove-Item $BinaryVm -Force }
+            
+            if (Test-Path $BinaryVm) { 
+                Remove-Item $BinaryVm -Force 
+                Write-Host "[ ⌐■_■] <(`"Old binary removed.`")"
+            }
+            
             Write-Host "[ ⌐■_■] <(`"VM synchronized and marked for rebuild.`")"
         } else {
             Write-Host "[ ⌐■_■] <(`"VM is already up to date.`")"
@@ -157,16 +162,29 @@ if ($args[0] -eq "st" -and $args[1] -eq "--zbc") {
 }
 
 if ($args[0] -eq "rebuild") {
-    Write-Host "[ ⌐■_■] <(`"Forcing VM rebuild...`")"
+    $BuildFlags = "-O3 -std=c++20"
+    $ModeName = "RELEASE"
+
+    if ($args[1] -eq "--debug") {
+        $BuildFlags = "-g -O0 -std=c++20 -DDEBUG_MODE"
+        $ModeName = "DEBUG"
+    }
+
+    Write-Host "[ ⌐■_■] <(`"Rebuilding VM engine in $ModeName mode...`")"
+
     if (Test-Path $BinaryVm) { 
-        Remove-Item $BinaryVm -Force 
+        Remove-Item $BinaryVm -Force
         Write-Host "[ ⌐■_■] <(`"Old binary removed.`")"
     }
-    Build-VmIfNeeded
-    if ($LASTEXITCODE -eq 0) {
+    g++ $BuildFlags.Split(" ") -I"$IncludeVmDir" "$SrcVmDir\*.cpp" -o "$BinaryVm"
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ X_X] <(`"Error: Failed to build VM.`")" -ForegroundColor Red
+        exit 1
+    } else {
         Write-Host "[ ⌐■_■] <(`"VM rebuilt successfully!`")"
+        exit 0
     }
-    exit 0
 }
 
 if (Test-Path $MainPy) {

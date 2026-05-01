@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from zonc.zonast import ZonType
 
 class RegT(Enum):
     F = 0
@@ -9,6 +10,7 @@ class RegT(Enum):
 class ZonVar:
     reg: int
     regt: RegT
+    zontype: ZonType
 
 class SymbolTable:
     def __init__(self):
@@ -22,7 +24,7 @@ class SymbolTable:
     def exit_scope(self):
         self.scopes.pop()
 
-    def define(self, name):
+    def define(self, name, zontype):
         used_registers = set()
         for scope in self.scopes:
             for var in scope.values():
@@ -31,7 +33,7 @@ class SymbolTable:
 
         for r in self.saved:
             if r not in used_registers:
-                self.scopes[-1][name] = ZonVar(r, RegT.X)
+                self.scopes[-1][name] = ZonVar(r, RegT.X, zontype)
                 return r
                 
         raise Exception(f"Error de registros: No quedan registros 's' disponibles para '{name}'")
@@ -45,7 +47,7 @@ class SymbolTable:
 
         for r in self.fsaved:
             if r not in used_registers:
-                self.scopes[-1][name] = ZonVar(r, RegT.F)
+                self.scopes[-1][name] = ZonVar(r, RegT.F, ZonType(2, "float"))
                 return r
                 
         raise Exception(f"Error de registros: No quedan registros 'fs' disponibles para '{name}'")

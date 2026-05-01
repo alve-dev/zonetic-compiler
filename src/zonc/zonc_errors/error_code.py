@@ -10,6 +10,10 @@ class ErrorCode(Enum):
     E0006 = auto()
     E0007 = auto()
     E0008 = auto()
+    E0009 = auto()
+    E0010 = auto()
+    E0011 = auto()
+    E0012 = auto()
     
     # Lexer Warnings
     W0001 = auto()
@@ -113,9 +117,21 @@ class ErrorCode(Enum):
     W3005 = auto()
     W3006 = auto()
     
-    # Runtime Errors
+    # Runtime Tree-Walker Errors
     E4001 = auto()
     E4002 = auto()
+    
+    # Optimization Errors
+    E5001 = auto()
+    E5002 = auto()
+    E5003 = auto()
+    E5004 = auto()
+    E5005 = auto()
+    E5006 = auto()
+    
+    W5001 = auto()
+    
+    
     
     
 # actualmente hay 89 Zonetic Errors y 8 Zonetic Warnings

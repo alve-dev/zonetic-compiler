@@ -7,9 +7,6 @@ from dataclasses import dataclass, field
 import copy
 from zonc.utils import levenshtein_zon
 
-# TODO: hacxer error para printeo raros como object struct, 
-
-
 @dataclass
 class DictTemp:
     dict_temp: dict
@@ -168,9 +165,10 @@ class Semantic:
                 
                 symbol = scope.get_symbol(stmt.decl_stmt.name)
                 if symbol.zontype.num == 0:
-                    symbol.zontype = zon_type
+                    symbol.zontype.name = zon_type.name
+                    symbol.zontype.num = zon_type.num
                     
-                elif symbol.zontype.num != zon_type.num:
+                elif symbol.zontype.num != zon_type.num and not(zon_type.num in [1, 6] and symbol.zontype.num in [1, 6]) and not(zon_type.num in [2, 7] and symbol.zontype.num in [2, 7]):
                     err_span = stmt.assign_stmt.value.stmts[stmt.assign_stmt.value.give_address].value.span if isinstance(stmt.assign_stmt.value, BlockExpr) else stmt.assign_stmt.value.span
                     self.diag.emit(
                         ErrorCode.E3006,
@@ -385,14 +383,15 @@ class Semantic:
         if isinstance(type_expr, tuple): type_expr = type_expr[0]
         
         if type_expr.num != self.current_func.return_type.num:
-            self.diag.emit(
-                ErrorCode.E3015,
-                { "func_name" : self.current_func.name_span.to_string(),
-                  "found" : type_expr.name.lower(),
-                  "expected" : self.current_func.return_type.name},
-                [node.span],
-                [(node.span, "expected `{expected}`, found `{found}`")]
-            )
+            if not(type_expr.num == 1 and self.current_func.return_type.num in [1, 6] or type_expr.num == 7 and self.current_func.return_type.num in [2, 7]):
+                self.diag.emit(
+                    ErrorCode.E3015,
+                    { "func_name" : self.current_func.name_span.to_string(),
+                    "found" : type_expr.name.lower(),
+                    "expected" : self.current_func.return_type.name},
+                    [node.span],
+                    [(node.span, "expected `{expected}`, found `{found}`")]
+                )
         return type_expr
         
     def check_func_form(self, node: FuncForm, scope: Enviroment):
@@ -580,7 +579,6 @@ class Semantic:
             [(node.span_name, "is immutable, it was already assigned a value"), (symbol.decl_span, "was first defined as immutable here")])
             return
         
-        
         if self.loop_depth > 0 and not(scope.exist_here(node.name)) and not(symbol.mutability) and symbol.is_empty:
             self.diag.emit(ErrorCode.E3016, None, [node.span], [(node.span_name, "cannot initialize an outer `inmut` variable here")])
             return
@@ -593,9 +591,10 @@ class Semantic:
         if value_type.num == 0: return
         
         if symbol.zontype.num == 0:
-            symbol.zontype = value_type
+            symbol.zontype.name = value_type.name
+            symbol.zontype.num = value_type.num
             
-        elif symbol.zontype.num != value_type.num:
+        elif symbol.zontype.num != value_type.num and not(value_type.num in [1, 6] and symbol.zontype.num in [1, 6]) and not(value_type.num in [2, 7] and symbol.num in [2, 7]):
             err_span = node.value.stmts[node.value.give_address].value.span if isinstance(node.value, BlockExpr) else node.value.span
             self.diag.emit(
                 ErrorCode.E3006,
@@ -722,6 +721,12 @@ class Semantic:
                 return ZonType(0, "UNKNOWN")
                 
         if equal and operands_type[0][0].num != operands_type[1][0].num:
+            if operands_type[0][0].num in [1, 6] and operands_type[1][0].num in [1, 6]:
+                return ZonType(1, "int64")
+            
+            if operands_type[0][0].num in [2, 7] and operands_type[1][0].num in [2, 7]:
+                return ZonType(7, "double")
+            
             self.diag.emit(
                 ErrorCode.E3004,
                 { "operator": operator, "right_type": operands_type[1][0].name, "left_type": operands_type[0][0].name},
@@ -735,8 +740,8 @@ class Semantic:
     def infer_expr(self, expr: NodeExpr, scope: Enviroment, is_field = False, name: str | None = None) -> ZonType:
         zontype_err = ZonType(0, "UNKNOWN")
     
-        if isinstance(expr, IntLiteral): return ZonType(1, "int")
-        elif isinstance(expr, FloatLiteral): return ZonType(2, "float")
+        if isinstance(expr, IntLiteral): return ZonType(1, "int64")
+        elif isinstance(expr, FloatLiteral): return ZonType(7, "double")
         elif isinstance(expr, BoolLiteral): return ZonType(3, "bool")
         elif isinstance(expr, StringLiteral): return ZonType(4, "string")
         
@@ -749,13 +754,14 @@ class Semantic:
             
             if left_type.num == 0 or right_type.num == 0: return zontype_err
             
+            
             if op in (Operator.ADD, Operator.SUB, Operator.MUL, Operator.POW, Operator.MOD, Operator.DIV):
                 op_str = {Operator.ADD: '+', Operator.SUB: '-', Operator.MUL: '*', Operator.DIV: '/', Operator.MOD: '%', Operator.POW: "**"}[op]
-                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), left_type, True, op_str, ZonType(1, "int"), ZonType(2, "float"))
+                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), left_type, True, op_str, ZonType(1, "int64"), ZonType(2, "float"), ZonType(6, "int32"), ZonType(7, "double"))
             
             elif op in (Operator.LT, Operator.GT, Operator.LE, Operator.GE):
                 op_str = {Operator.LT: '<', Operator.GT: '>', Operator.LE: '<=', Operator.GE: '>='}[op]
-                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), ZonType(3, "bool"), True, op_str, ZonType(1, "int"), ZonType(2, "float"))
+                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), ZonType(3, "bool"), True, op_str, ZonType(1, "int64"), ZonType(2, "float"), ZonType(6, "int32"), ZonType(7, "double"))
             
             elif op in (Operator.AND, Operator.OR):
                 op_str = {Operator.AND: 'and/&&', Operator.OR: 'or/||'}[op]
@@ -763,7 +769,7 @@ class Semantic:
             
             elif op in (Operator.EQ, Operator.NE):
                 op_str = {Operator.EQ: '==', Operator.NE: '!='}[op]
-                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), ZonType(3, "bool"), True, op_str, ZonType(1, "int"), ZonType(2, "float"), ZonType(3, "bool"))
+                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), ZonType(3, "bool"), True, op_str, ZonType(1, "int64"), ZonType(2, "float"), ZonType(3, "bool"), ZonType(6, "int32"), ZonType(7, "double"))
                 
         elif isinstance(expr, UnaryExpr):
             op = expr.operator
@@ -772,7 +778,7 @@ class Semantic:
             if value_type.num == 0: return zontype_err
             
             if op == Operator.NEG:
-                return self.check_operands_type(((value_type, expr.value.span),), value_type, False, '-', ZonType(1, "int"), ZonType(2, "float"))
+                return self.check_operands_type(((value_type, expr.value.span),), value_type, False, '-', ZonType(1, "int64"), ZonType(2, "float"), ZonType(6, "int32"), ZonType(7, "double"))
             else:
                 return self.check_operands_type(((value_type, expr.value.span),), value_type, False, 'not/!', ZonType(3, "bool"))
         

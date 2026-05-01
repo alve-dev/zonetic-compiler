@@ -10,12 +10,19 @@ class Symbol:
         is_empty: bool,
         decl_span: Span,
         scope_object: 'Enviroment' = None,
+        value = None,
+        opti = False
     ):
         self.mutability = mutability
         self.zontype = zontype
         self.is_empty = is_empty
         self.decl_span = decl_span
         self.scope_object = scope_object
+        self.value = value
+        self.opti = opti
+        
+    def __repr__(self):
+        return f"mut={self.mutability}, zontype={self.zontype}, value={self.value}"
         
 class FuncSymbol:
     def __init__(

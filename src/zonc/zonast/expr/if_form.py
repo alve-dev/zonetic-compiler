@@ -42,6 +42,6 @@ class IfForm(Node):
                 children.append(branch)
                 
         if not self.else_branch is None:
-            children.append(branch)
+            children.append(self.else_branch)
             
         return children

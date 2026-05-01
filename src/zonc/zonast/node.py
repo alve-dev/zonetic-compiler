@@ -4,5 +4,5 @@ class Node:
     def __init__(self, span: Span):
         self.span = span
     
-    def __repr__() -> str:
+    def __repr__(self) -> str:
         return f"<{__class__.__name__}>"

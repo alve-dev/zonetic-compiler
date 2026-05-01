@@ -294,10 +294,12 @@ class Parser:
                 current_span = zon_type._span
                        
                 match zon_type._type:
-                    case TokenType.KEYWORD_INT: var_type = ZonType(1, "int")
+                    case TokenType.KEYWORD_INT64: var_type = ZonType(1, "int64")
                     case TokenType.KEYWORD_FLOAT: var_type = ZonType(2, "float")
                     case TokenType.KEYWORD_BOOL: var_type = ZonType(3, "bool")
                     case TokenType.KEYWORD_STRING: var_type = ZonType(4, "string")
+                    case TokenType.KEYWORD_INT32: var_type = ZonType(6, "int32")
+                    case TokenType.KEYWORD_DOUBLE: var_type = ZonType(7, "double")
                     case TokenType.KEYWORD_VOID:
                         self.diag.emit(ErrorCode.E2018, None, [zon_type._span], [(zon_type._span, "`void` cannot be used as a type here")])
                         self.synchronize(block)
@@ -307,7 +309,7 @@ class Parser:
                             var_type = self.LIST_TYPE[zon_type._value]
 
                         else:
-                            list_type = ["int", "string", "bool", "float"]
+                            list_type = ["int64", "string", "bool", "float", "int32", "double"]
                             for key in self.LIST_TYPE:
                                 list_type.append(key)
                             
@@ -521,10 +523,12 @@ class Parser:
                     self.advance()
                     zontype_token = self.tokens._peek(self.position)
                     match zontype_token._type:
-                        case TokenType.KEYWORD_INT: zontype = ZonType(1, "int")
+                        case TokenType.KEYWORD_INT64: zontype = ZonType(1, "int64")
                         case TokenType.KEYWORD_FLOAT: zontype = ZonType(2, "float")
                         case TokenType.KEYWORD_BOOL: zontype = ZonType(3, "bool")
                         case TokenType.KEYWORD_STRING: zontype = ZonType(4, "string")
+                        case TokenType.KEYWORD_INT32: zontype = ZonType(6, "int32")
+                        case TokenType.KEYWORD_DOUBLE: zontype = ZonType(7, "double")
                         case TokenType.KEYWORD_VOID:
                             self.diag.emit(ErrorCode.E2018, None, [zontype_token._span], [(zontype_token._span, "`void` cannot be used as a type here")])
                             self.synchronize(block, [TokenType.RPAREN, TokenType.COMMA])
@@ -537,7 +541,7 @@ class Parser:
                                 zontype = self.LIST_TYPE[zontype_token._value]
                             
                             else:
-                                list_type = ["int", "string", "bool", "float"]
+                                list_type = ["int64", "int32", "string", "bool", "float", "double"]
                                 for key in self.LIST_TYPE:
                                     list_type.append(key)
                             
@@ -600,17 +604,19 @@ class Parser:
             self.advance()
             zontype_token = self.tokens._peek(self.position)
             match zontype_token._type:
-                case TokenType.KEYWORD_INT: return_type = ZonType(1, "int")
+                case TokenType.KEYWORD_INT64: return_type = ZonType(1, "int")
                 case TokenType.KEYWORD_FLOAT: return_type = ZonType(2, "float")
                 case TokenType.KEYWORD_BOOL: return_type = ZonType(3, "bool")
                 case TokenType.KEYWORD_STRING: return_type = ZonType(4, "string")
                 case TokenType.KEYWORD_VOID: return_type = ZonType(5, "void")
+                case TokenType.KEYWORD_INT32: return_type = ZonType(6, "int32")
+                case TokenType.KEYWORD_DOUBLE: return_type = ZonType(7, "double")
                 case _:
                     if zontype_token._value in self.LIST_TYPE:
                         return_type = self.LIST_TYPE[zontype_token._value]
                     
                     else:
-                        list_type = ["int", "string", "bool", "float", "void"]
+                        list_type = ["int64", "int32", "string", "bool", "float", "void"]
                         for key in self.LIST_TYPE:
                             list_type.append(key)
                             

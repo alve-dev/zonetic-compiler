@@ -2,8 +2,10 @@ from enum import Enum, auto
 
 class TokenType(Enum):
     # KEYWORDS
-    KEYWORD_INT = auto()
+    KEYWORD_INT64 = auto()
+    KEYWORD_INT32 = auto()
     KEYWORD_FLOAT = auto()
+    KEYWORD_DOUBLE = auto()
     KEYWORD_BOOL = auto()
     KEYWORD_STRING = auto()
     KEYWORD_VOID = auto()

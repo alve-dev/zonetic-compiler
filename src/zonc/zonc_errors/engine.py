@@ -15,6 +15,10 @@ class DiagnosticEngine:
         ErrorCode.E0006 : 0,
         ErrorCode.E0007 : 0,
         ErrorCode.E0008 : 0,
+        ErrorCode.E0009 : 0,
+        ErrorCode.E0010 : 0,
+        ErrorCode.E0011 : 0,
+        ErrorCode.E0012 : 0,
         
         ErrorCode.W0001 : 0,
         
@@ -112,6 +116,14 @@ class DiagnosticEngine:
         
         ErrorCode.E4001: 0,
         ErrorCode.E4002: 0,
+        
+        ErrorCode.E5001: 0,
+        ErrorCode.E5002: 0,
+        ErrorCode.E5003: 0,
+        ErrorCode.E5004: 0,
+        ErrorCode.E5005: 0,
+        
+        ErrorCode.W5001: 0,
     }
 
     

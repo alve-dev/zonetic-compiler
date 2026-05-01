@@ -4,12 +4,14 @@ from zonc.scanner import Lexer, ListTokens, TokenType
 from zonc.syntatic_normalizer import TheNormalizer
 from zonc.parser import Parser
 from zonc.semantic import Semantic
+from zonc.optimization import *
 from zonc.runtime import Interpreter, ZoneticRuntimeError
 from zonc.utils import print_ast, print_tokens
 import pathlib
 import os
 from zonc.utils import Chronometer
 from zonc.bytecodegen import *
+import traceback
 
 if os.name == 'nt':
     CONFIG_FILE = pathlib.Path(os.environ.get('USERPROFILE', pathlib.Path.home())) / ".zonconfig"
@@ -19,8 +21,10 @@ else:
     CONFIG_FILE = pathlib.Path.home() / ".zonconfig"
     
 KEYWORDS = {
-        "int": TokenType.KEYWORD_INT,
+        "int64": TokenType.KEYWORD_INT64,
+        "int32": TokenType.KEYWORD_INT32,
         "float": TokenType.KEYWORD_FLOAT,
+        "double": TokenType.KEYWORD_DOUBLE,
         "string": TokenType.KEYWORD_STRING,
         "bool": TokenType.KEYWORD_BOOL,
         "mut": TokenType.KEYWORD_MUT,
@@ -275,12 +279,22 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
         diagnostic.display()
         diagnostic.clear_engine()
         return
+    
+    constant_folding = ConstantFolding(diagnostic)
+    constant_folding.visit_Program(root_node)
+    
+    if diagnostic.has_errors():
+        diagnostic.display()
+        diagnostic.clear_engine()
+        return
+    
+    dce = DeadCodeElimination()
+    dce.eliminate_in_program(root_node)
             
     em = Emitter()
     for stmt in root_node.stmts:
         em.generate_stmt(stmt)
         
-    # emitir halt por ecall, con numero 10 en registro 17 que es exit
     em.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 93)
     em.emit_ecall()
     
@@ -532,4 +546,5 @@ def cmd_zon_set_file(args=None, mode=0):
             
             
     except Exception as e:
-        print(f"[zon error]: Failed to save file. {e}")
+        traceback.print_exc()
+        print(f"[zon error]: Failed to save file. {e.with_traceback}")

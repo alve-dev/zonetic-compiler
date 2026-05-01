@@ -3,7 +3,43 @@
 All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
+## v2.3.0 — *The 64-bit Precision Update*
+
+> This version marks the architectural shift to full 64-bit dominance. By expanding the word size, implementing a unified Constant Pool, and integrating the RISC-V "D" extension, Zonetic now handles massive integers and high-precision physics data with "industrial-grade" stability.
+
+**The 64-bit Foundation (The Wide Path)**
+
+* **Native 64-bit Integers (`int64`)** — Support for the full range of signed 64-bit integers, allowing literals up to $9,223,372,036,854,775,807$ via Constant Pool loading.
+* **Double Precision Floating-Point (`double`)** — Implementation of 64-bit floats as the standard for scientific computation, ensuring high-fidelity modeling for future robotics and physics simulations.
+* **Scientific Notation Support** — The Lexer and Parser now recognize exponential literals (e.g., `2e3`, `5.5E-10`), automatically promoting them to `double` precision.
+* **Type Bifurcation** — Strict internal separation between `int32` vs `int64` and `float` vs `double`, providing granular control over how data is stored and operated upon.
+
+**Unified Constant Pool & Memory Mapping**
+
+* **The Constant Pool Architecture** — Introduction of a dedicated data section at the end of the binary. This allows loading 64-bit constants that exceed the immediate limits of standard RISC-V instructions.
+* **Relative Addressing (`AUIPC`)** — The Emitter now uses PC-relative addressing to calculate offsets to the Constant Pool, ensuring code remains position-independent.
+* **Universal Constant Loading** — Implementation of `LD` (Load Doubleword) and `FLD` (Float Load Double) to pull 8-byte values directly into registers.
+
+**Expanded Instruction Set (ISA Extension)**
+
+* **The "D" Extension (Double Precision)** — Full integration of RISC-V double-precision floating-point instructions, including `FADD.D`, `FSUB.D`, `FMUL.D`, and `FDIV.D`.
+* **Word-Mode Operations (`-W` Instructions)** — Support for `ADDW`, `SUBW`, and other word-specific instructions in the VM to handle 32-bit arithmetic within 64-bit registers via sign-extension.
+* **Precision Conversion** — Added specialized instructions for moving data between integer and floating-point registers, as well as converting between single and double precision.
+
+**Optimizer & Compiler Intelligence**
+
+* **Constant Folding** — The compiler now evaluates constant expressions at compile-time (e.g., `2 + 2` becomes `4`), reducing the number of instructions sent to the VM.
+* **Dead Code Elimination (DCE)** — Implementation of a basic optimization pass that identifies and removes unreachable code segments, streamlining the final binary.
+* **Refined Comment Nesting** — Upgraded the comment system to support nested block comments (`-| -| |- |-`), allowing for better code documentation and temporary code disabling.
+* **Short-hand Single Comments** — Added `-/` as a lightweight syntax for single-line comments.
+
+**VM Core Refinement**
+
+* **8-Byte Alignment** — The VM and Emitter now coordinate to ensure 64-bit constants are properly aligned in memory, preventing desynchronization during data loads.
+* **Extended Register Width** — Internal `regs` and `fregs` arrays have been upgraded to `int64_t` and `double` respectively to reflect the new 64-bit hardware reality.
+
 ---
+
 ## v2.1.0 — *The Ascension Logic Update*
 
 > This version marks the transition from linear execution to complex decision-making. By implementing conditional branching, short-circuit logic, and a refined scope architecture, Zonetic attains a new level of computational "cultivation."

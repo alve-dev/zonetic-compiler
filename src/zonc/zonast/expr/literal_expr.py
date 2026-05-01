@@ -9,7 +9,7 @@ class IntLiteral(LiteralNode):
     def __init__(
         self,
         value: int,
-        span: Span
+        span: Span = None
         ) -> None:
         
         self.value = value
@@ -23,7 +23,7 @@ class FloatLiteral(LiteralNode):
     def __init__(
         self,
         value: float,
-        span: Span
+        span: Span = None
         ) -> None:
         
         self.value = value
@@ -37,7 +37,7 @@ class StringLiteral(LiteralNode):
     def __init__(
         self,
         value: str,
-        span: Span
+        span: Span = None
         ) -> None:
         
         self.value = value
@@ -53,7 +53,7 @@ class BoolLiteral(LiteralNode):
     def __init__(
         self,
         value: int,
-        span: Span
+        span: Span = None
         ) -> None:
         
         self.value = value

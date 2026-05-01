@@ -18,7 +18,7 @@ A statically typed, expression-oriented language designed for robotics and perfo
 
 ## Status
 
-> **Current Version:** `v2.2.0` — *The 64-bit Update* > **Next Milestone:** `v2.3.0` — *N/A*
+> **Current Version:** `v2.3.0` — *The 64-bit Precision Update* > **Next Milestone:** `v2.4.0` — *N/A*
 
 ## Features
 

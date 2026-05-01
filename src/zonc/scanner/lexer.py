@@ -87,6 +87,7 @@ class Lexer:
                 self._advance(2)
                 success = False
                 start_position = self._position
+                count = 1
 
                 while not self._is_end():
                     match self._peek(0):
@@ -94,14 +95,26 @@ class Lexer:
                             match self._peek(1):
                                 case '-':
                                     self._advance(2)
-                                    success = True
-                                    break
+                                    count -= 1
+                                    if count == 0:
+                                        success = True
+                                        break
                                 
                                 case _:
                                     self._advance(2)
                                     
+                        case '-':
+                            match self._peek(1):
+                                case '|':
+                                    self._advance(2)
+                                    count += 1
+                                    
+                                case _:
+                                    self._advance(1)
+                                    
                         case _:
                             self._advance(1)
+                            
                 if not success:
                     self._diagnostic.emit(
                         ErrorCode.E0002,
@@ -339,7 +352,8 @@ class Lexer:
         is_separate = False
         
         while not self._is_end():
-            if self._peek(0).isdigit():
+            char = self._peek(0)
+            if char.isdigit():
                 if is_separate and digit_sequence >= 3:
                     while self._peek(0).isdigit() or self._peek(0) == '_':
                         self._advance(1)
@@ -353,48 +367,13 @@ class Lexer:
                     break
                 
                 digit_sequence += 1
-                numero_completo.append(self._peek(0))
+                numero_completo.append(char)
                 self._advance(1)
             
-            elif self._peek(0) == '.' and self._peek(1).isdigit():
-                if is_float:
-                    if not is_error:
-                        self._advance(1)
-                        while (self._peek(0).isdigit() or self._peek(0) == '.') and not(self._is_end()):
-                            self._advance(1)
-                
-                        span = Span(start_position, self._position, self._file_map)
-                        self._diagnostic.emit(
-                            ErrorCode.E0005,
-                            None,
-                            [span],
-                            [(span, "this number has too many decimal points")]
-                        )
-                        is_error = True
-                    
-                else:
-                    is_float = True     
-                
-                numero_completo.append(self._peek(0))
-                numero_completo.append(self._peek(1))
-                self._advance(2)
-            
-            elif self._peek(0) == '_':
-                if is_float:
-                    while self._peek(0).isdigit() or self._peek(0) == '_':
-                        self._advance(1)
-                        
-                    span_error = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(
-                       ErrorCode.E0008, None, [span_error], [(span_error, "`_` found in decimal part")] 
-                    )
-                    is_error = True
-                    break
-                
+            elif char == '.' and self._peek(1).isdigit():
                 if is_separate and digit_sequence != 3:
-                    while self._peek(0).isdigit() or self._peek(0) == '_':
+                    while self._peek(0).isdigit() or self._peek(0) == '.' or self._peek(0) == '_':
                         self._advance(1)
-                            
                     span_error = Span(start_position, self._position, self._file_map)
                     self._diagnostic.emit(
                         ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
@@ -402,60 +381,122 @@ class Lexer:
                     )
                     is_error = True
                     break
+
+                if is_float:
+                    self._advance(1)
+                    while (self._peek(0).isdigit() or self._peek(0) == '.') and not(self._is_end()):
+                        self._advance(1)
+                    span = Span(start_position, self._position, self._file_map)
+                    self._diagnostic.emit(ErrorCode.E0005, None, [span], [(span, "this number has too many decimal points")])
+                    is_error = True
+                    break
+                else:
+                    is_float = True
+                    is_separate = False
+                    digit_sequence = 0
+                
+                numero_completo.append(char)
+                self._advance(1)
+            
+            elif char == '_':
+                if is_float:
+                    while self._peek(0).isdigit() or self._peek(0) == '_':
+                        self._advance(1)
+                    span_error = Span(start_position, self._position, self._file_map)
+                    self._diagnostic.emit(ErrorCode.E0008, None, [span_error], [(span_error, "`_` found in decimal part")])
+                    is_error = True
+                    break
+                
+                if is_separate and digit_sequence < 3:
+                    while self._peek(0).isdigit() or self._peek(0) == '_':
+                        self._advance(1)
+                    span_error = Span(start_position, self._position, self._file_map)
+                    self._diagnostic.emit(ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error], [(span_error, "`_` is not separating thousands here")])
+                    is_error = True
+                    break
                 
                 is_separate = True
                 digit_sequence = 0
                 self._advance(1)
                 
-            elif self._peek(0).isalpha() or self._peek(0) == '_':
+            elif char in ['e', 'E']:
+                is_float = True
+                minimun_num = False
+                numero_completo.append('e')
                 self._advance(1)
-                while self._peek(0).isalnum() or self._peek(0) == '_':
+                char = self._peek(0)
+                if  char in ['+', '-']:
+                    numero_completo.append(char)
                     self._advance(1)
+                    
+                while not self._is_end():
+                    char = self._peek(0)
+                    if char.isdigit():
+                        numero_completo.append(self._peek(0))
+                        self._advance(1)
+                        minimun_num = True
+                        
+                    elif char == '.':
+                        while not self._is_end() and self._peek(0).isalnum() or self._peek(0) in ['.']:
+                            self._advance(1)
+                        
+                        span_err = Span(start_position, self._position, self._file_map)
+                        self._diagnostic.emit(
+                            ErrorCode.E0011, None, [span_err], [(span_err, "exponents cannot have decimal points")]
+                        )
+                        is_error = True
+                        break
+                        
+                    elif char.isalpha() or char == '_':
+                        while not self._is_end() and self._peek(0).isalnum() or self._peek(0) == ['.', '_']:
+                            self._advance(1)
+                        
+                        span_err = Span(start_position, self._position, self._file_map)
+                        self._diagnostic.emit(
+                            ErrorCode.E0012, None, [span_err], [(span_err, "only digits are allowed here")]
+                        )
+                        is_error = True
+                        break
+                    
+                    else:
+                        if not minimun_num:
+                            is_error = True
+                            span_err = Span(self._position-1, self._position, self._file_map)
+                            self._diagnostic.emit(
+                                ErrorCode.E0010, None, [span_err], [(span_err, "After this point, only digits are allowed.")]
+                            )
+                        break
                 
+                break
+                      
+            elif char.isalpha():
+                self._advance(1)
+                while not self._is_end() and self._peek(0).isalnum() or char == '_':
+                    self._advance(1)
                 token = self._code[start_position : self._position]
                 span = Span(start_position, self._position, self._file_map)
-                
-                self._diagnostic.emit(
-                    ErrorCode.E0006,
-                    { "token" : token},
-                    [span],
-                    [(span, "`{token}` starts with a digit, which is not allowed for identifiers")]
-                )
+                self._diagnostic.emit(ErrorCode.E0006, { "token" : token}, [span], [(span, f"`{token}` starts with a digit")])
                 is_error = True
+                break
             
             else:
                 break
-        
-        if self._peek(-1) == '_':
-            span_error = Span(start_position, self._position, self._file_map)
-            self._diagnostic.emit(
-                ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
-                [(span_error, "`_` is not separating thousands here")]
-            )
-            is_error = True
             
+        if not is_error and is_separate and not is_float:
+            if digit_sequence != 3:
+                span_error = Span(start_position, self._position, self._file_map)
+                self._diagnostic.emit(
+                    ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
+                    [(span_error, "`_` is not separating thousands here")]
+                )
+                is_error = True
+            
+        if is_error: return
+        
         numero = "".join(numero_completo)
-        
-        if is_error:
-            return
-        
-        elif is_float:
-            self._tokens._add(
-                Token(
-                    TokenType.LITERAL_NUMBER,
-                    float(numero),
-                    Span(start_position, self._position, self._file_map)
-                    )
-            )
-        
-        else:
-            self._tokens._add(
-                Token(
-                    TokenType.LITERAL_NUMBER,
-                    int(numero),
-                    Span(start_position, self._position, self._file_map)
-                    )
-            )
+        val = float(numero) if is_float else int(numero)
+        self._tokens._add(Token(TokenType.LITERAL_NUMBER, val, Span(start_position, self._position, self._file_map)))
+
                 
                 
     def _scan_identifier_or_keyword(self) -> None:
@@ -463,12 +504,20 @@ class Lexer:
         self._advance(1)
                                 
         while not self._is_end():
-            if not (self._peek(0).isalnum() or self._peek(0) == '_'):
+            char = self._peek(0)
+            if not (char.isalnum() or char == '_'):
                 break
             
             self._advance(1)
             
         ident = self._code[start_position : self._position]
+        
+        if ident == "_":
+            span_err = Span(start_position, self._position, self._file_map)
+            self._diagnostic.emit(
+                ErrorCode.E0009, None, [span_err], [(span_err, "identifiers must contain at least one letter or digit")]
+            )
+            return
         
         if ident in self.keywords:
             self._tokens._add(

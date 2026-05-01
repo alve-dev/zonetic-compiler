@@ -164,18 +164,30 @@ if [[ "$1" == "st" && "$2" == "--zbc" ]]; then
 fi
 
 if [ "$1" == "rebuild" ]; then
-    echo "[ ⌐■_■] <(\"Forcing VM rebuild...\")"
+    BUILD_FLAGS="-O3 -std=c++20"
+    MODE_NAME="RELEASE"
+
+    if [ "$2" == "--debug" ]; then
+        BUILD_FLAGS="-g -O0 -std=c++20 -DDEBUG_MODE"
+        MODE_NAME="DEBUG"
+    fi
+
+    echo "[ ⌐■_■] <(\"Rebuilding VM engine in $MODE_NAME mode...\")"
+
     if [ -f "$BINARY_VM" ]; then
         rm -f "$BINARY_VM"
         echo "[ ⌐■_■] <(\"Old binary removed.\")"
     fi
 
-    build_vm_if_needed
+    g++ $BUILD_FLAGS -I"$IncludeVmDir" "$SrcVmDir"/*.cpp -o "$BinaryVm"
 
-    if [ $? -eq 0 ]; then
+    if [ $? -ne 0 ]; then
+        echo -e "[ X_X] <(\"Error: Failed to build VM.\")"
+        exit 1
+    else
         echo "[ ⌐■_■] <(\"VM rebuilt successfully!\")"
+        exit 0
     fi
-    exit 0
 fi
 
 
