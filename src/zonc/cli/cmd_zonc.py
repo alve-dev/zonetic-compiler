@@ -546,7 +546,6 @@ def cmd_zon_set_file(args=None, mode=0):
 
             
         else:
-            print("--- Executing ---")
             if mode == 1:
                 cmd_zon_run(code_source="\n".join(lines))
             else:

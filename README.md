@@ -18,7 +18,7 @@ A statically typed, expression-oriented language designed for robotics and perfo
 
 ## Status
 
-> **Current Version:** `v2.3.0` — *The 64-bit Precision Update* > **Next Milestone:** `v2.4.0` — *N/A*
+> **Current Version:** `v2.4.0` — *The Function Update 2.0* > **Next Milestone:** `v2.5.0` — *The Heap Update*
 
 ## Features
 
@@ -43,15 +43,32 @@ Each phase generates indexed error codes for precise debugging:
 - `E1xxx`: Normalizer
 - `E2xxx`: Parser
 - `E3xxx`: Semantic / Type Checker
-- `E5xxx`: Emitter (Bytecode Generation)
+- `E4xxx`: Tree-Walker
+- `E5xxx`: Optimizations
 
 ## Quick Look (Legacy Interpreter Mode)
 
 Current development focuses on the VM backend. To test high-level features like Structs and Strings, use the legacy interpreter:
 
 ```bash
-zon repl --in
+alve-dev@dev-zonetic:~/.zonetic$ zon repl --in
+[zon info]: Repl Mode. Type 'EOF' or Ctrl+D to end.
 >> print("Hello from Legacy Mode")
+>> EOF
+Hello from Legacy Mode
+--------------------------------------------------------------------------------
+[ MASSIVE SUCCESS ] Compiler: 0.26ms | Runtime: 0.03ms | Total: 0.29ms
+[ ⌐■_■]b <("Epic execution, bro. Your logic is as sharp as a Katana!")
+```
+
+In vm:
+
+```bash
+alve-dev@dev-zonetic:~/.zonetic$ zon repl
+[zon info]: Repl Mode. Type 'EOF' or Ctrl+D to end.
+>> print(10)
+>> EOF
+10
 ```
 
 ## Documentation
@@ -68,4 +85,4 @@ Zonetic 2.0.0 uses a modular installation. The compiler and VM are synchronized 
 * **macOS:** *Coming soon (Testing in progress)*
 
 ![Language](https://img.shields.io/badge/written%20in-Python-yellow)
-[![Version](https://img.shields.io/badge/version-2--2--0-orange)](changelog.md)
+[![Version](https://img.shields.io/badge/version-2--4--0-orange)](changelog.md)
