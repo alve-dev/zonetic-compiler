@@ -32,23 +32,13 @@ if ($args[0] -eq "update") {
         git -C "$ZoncDir" fetch origin main -q
         $RemoteMsg = ([string](git -C "$ZoncDir" log -1 origin/main --pretty=format:%s)).Trim()
         $LocalMsg = ([string](git -C "$ZoncDir" log -1 --pretty=format:%s)).Trim()
-
-        Write-Host "[DEBUG] RemoteMsg: '$RemoteMsg'"
-        Write-Host "[DEBUG] LocalMsg: '$LocalMsg'"
-        Write-Host "[DEBUG] RemoteMsg length: $($RemoteMsg.Length)"
-        Write-Host "[DEBUG] LocalMsg length: $($LocalMsg.Length)"
-        Write-Host "[DEBUG] Contains NOSTABLE? $($RemoteMsg -like '*[NOSTABLE]*')"
-
-        if ($RemoteMsg -notlike "*[NOSTABLE]*" -and $RemoteMsg -ne $LocalMsg) {
-            Write-Host "[DEBUG] CONDITION MET! Executing update..."
+        
+        if ($RemoteMsg -notmatch "\[NOSTABLE\]" -and $RemoteMsg -ne $LocalMsg) {
             git -C "$ZoncDir" reset --hard origin/main -q
             Write-Host "[ ⌐■_■] <(`"Compiler updated: $RemoteMsg`")"
             $Updated = $true
         } else {
             Write-Host "[ ⌐■_■] <(`"Compiler is already up to date.`")"
-            Write-Host "[DEBUG] CONDITION NOT MET"
-            Write-Host "[DEBUG] Reason 1 (NOSTABLE): $($RemoteMsg -like '*[NOSTABLE]*')"
-            Write-Host "[DEBUG] Reason 2 (equal): $($RemoteMsg -eq $LocalMsg)"
         }
     }
 
