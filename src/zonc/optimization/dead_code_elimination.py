@@ -57,8 +57,7 @@ class DeadCodeElimination:
             elif isinstance(stmt, WhileForm):
                 if isinstance(stmt.condition_field, BoolLiteral) and stmt.condition_field.value == 0:
                     node.stmts.pop(i + eliminate)
-                    eliminate += 1    
-            
+                    eliminate += 1  
                 
     def eliminate_in_if(self, if_form: IfForm):
         if isinstance(if_form.if_branch.cond, BoolLiteral) and if_form.if_branch.cond.value == 1:

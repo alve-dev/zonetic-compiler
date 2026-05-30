@@ -2,7 +2,7 @@ from .token import Token
 
 class ListTokens:
     def __init__(self):
-        self._list = []
+        self._list: list[Token] = []
         self._lenght = 0
                 
     

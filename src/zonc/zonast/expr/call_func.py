@@ -21,8 +21,14 @@ class CallFunc(Node):
         return f"{self.name}()"
     
     def get_children(self):
+        params = None
+        if self.params is not None:
+            params = self.params
+        else:
+            params = []
+            
         if not self.keyparams is None:
             for key, param in self.keyparams.items():
-                self.params.append(param[0])
+                params.append(param[0])
 
-        return self.params
+        return params

@@ -1,22 +1,23 @@
 import sys
 from .cmd_zonc import cmd_zon_run, cmd_zon_version, cmd_zon_help, cmd_zon_set_path, cmd_zon_show_path, cmd_zon_clear_path
 from .cmd_zonc import cmd_zon_set_file, cmd_zon_compile
-from zonc.utils import levenshtein_zon
+from zonc.utils import levenshtein_zon, disassemble_file
 from .cmdregistry import COMMANDS
+
 
 def run_cli():
     args = sys.argv[1:]
     if len(args) == 0:
         print("[zon error]: No command or file specified.")
         print("-- The forge is idle. Use zon help to learn the commands and start building.")
-        return
-    
+        sys.exit(1)
+        
     if args[0] == 'rin':
         if len(args) < 2:
             print("[zon error]: No file specified for the run command.")
             print("-- The engine needs a target. Use zon rin <filename>.zon to start execution.")
-            return
-        
+            sys.exit(1)
+            
         cmd_zon_run(args[1])
         
     elif args[0] == 'c':
@@ -24,8 +25,8 @@ def run_cli():
         if len(path) < 1:
             print("[zon error]: No file specified for the compile command.")
             print("-- The engine needs a target. Use zon c <filename>.zon to start execution.")
-            return
-        
+            sys.exit(1)
+
         cmd_zon_compile(path[0])
         
     elif args[0] == "help":
@@ -42,14 +43,14 @@ def run_cli():
         if len(flag) < 1:
             print("[zon error]: No flag provided for st command")
             print("-- Usage: zon st <flag>")
-            return
+            sys.exit(1)
         
         if args[1] == "--path":
             path = args[2:]
             if len(path) < 1:
                 print("[zon error]: No path provided for st --path.")
                 print("-- Usage: zon st --path </path/to/your/scripts>")
-                return
+                sys.exit(1)
 
             cmd_zon_set_path(path[0])
             
@@ -58,7 +59,7 @@ def run_cli():
             if len(path) < 1:
                 print("[zon error]: No path or filename specified.")
                 print("-- Usage: zon st --file <path/to/folder/script.zon>")
-                return
+                sys.exit(1)
             
             keyend = args[3:]
             if len(keyend) < 1:
@@ -71,7 +72,7 @@ def run_cli():
             if len(path) < 1:
                 print("[zon error]: No path or filename bytecode specified.")
                 print("-- Usage: zon st --zbc <path/to/folder/script.zon>")
-                return
+                sys.exit(1)
             
             keyend = args[3:]
             if len(keyend) < 1:
@@ -88,14 +89,14 @@ def run_cli():
             
             print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
             print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-            return
+            sys.exit(1)
         
     elif args[0] == "vw":
         flag = args[1:]
         if len(flag) < 1:
             print("[zon error]: No flag provided for vw command")
             print("-- Usage: zon vw <flag>")
-            return
+            sys.exit(1)
         
         match args[1]:
             case "--path": cmd_zon_show_path()
@@ -105,7 +106,8 @@ def run_cli():
                 if len(path) < 1:
                     print("[zon error]: No file specified for the ast command.")
                     print("--Usage zon vw --ast <path>")
-                    return
+                    sys.exit(1)
+                    
                 cmd_zon_run(path[0], "ast")
                 
             case "--tokens":
@@ -113,11 +115,21 @@ def run_cli():
                 if len(path) < 1:
                     print("[zon error]: No file specified for the tokens command.")
                     print("--Usage zon vw --ast <path>")
-                    return
+                    sys.exit(1)
+                    
                 cmd_zon_run(path[0], "token")
                 
+            case "--zonasm":
+                path = args[2:]
+                if len(path) < 1:
+                    print("[zon error]: No file specified for the zonasm visual command")
+                    print("--Usage zon vw --zonasm <path>")
+                    sys.exit(1)
+                
+                disassemble_file(path[0])
+                
             case _:
-                list_commands = ["--file", "--path", "--tokens", "--ast", "--vers"]
+                list_commands = ["--file", "--path", "--tokens", "--ast", "--vers", "--zonasm"]
                 leven = levenshtein_zon.suggest_command(args[1], list_commands, 5)
                 if leven is None: leven = "Use zon help to see the available commands."
                 else: leven = leven = f"Did you mean?: {leven}"
@@ -125,14 +137,14 @@ def run_cli():
                 
                 print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
                 print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-                return
+                sys.exit(1)
                   
     elif args[0] == "clr":
         flag = args[1:]
         if len(flag) < 1:
             print("[zon error]: No flag provided for clr command")
             print("-- Usage: zon clr <flag>")
-            return
+            sys.exit(1)
         
         if args[1] == "--path":
             cmd_zon_clear_path()
@@ -145,7 +157,7 @@ def run_cli():
             
             print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
             print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-            return
+            sys.exit(1)
             
     elif args[0] == "repl":
         if args[1] == "--in":
@@ -177,3 +189,4 @@ def run_cli():
             
         print("[zon error]: Unknown command.")
         print(f"-- The forge doesn't recognize that instruction. {leven}")
+        sys.exit(1)

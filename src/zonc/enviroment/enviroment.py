@@ -12,7 +12,7 @@ class Enviroment:
         self.values[name] = value
         
     
-    def get_symbol(self, name: str) -> Symbol | None:
+    def get_symbol(self, name: str) -> Symbol | FuncSymbol | None:
         symbol = self.values.get(name)
         
         if symbol is not None:
@@ -53,7 +53,7 @@ class Enviroment:
         symbol = None
         list_symbols = []
         if type_symbol == "var" or type_symbol == "varob": symbol = Symbol
-        if type_symbol == "fun": symbol = FuncSymbol
+        elif type_symbol == "fun": symbol = FuncSymbol
         
         for key, sym in self.values.items():
             if isinstance(sym, symbol):
@@ -64,7 +64,7 @@ class Enviroment:
                     list_symbols.append(key)
                      
         if self.parent and not is_field:
-            return self.parent.get_values_valids(type_symbol).extend(list_symbols)
-        
+            list_symbols.extend(self.parent.get_values_valids(type_symbol))
+            
         return list_symbols
             

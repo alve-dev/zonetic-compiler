@@ -31,6 +31,7 @@ class Semantic:
         self.file_map = file_map
         self.current_func: FuncSymbol | None = None
         self.loop_depth: int = 0
+        self.has_main = False
         
     def insert_std(self, scope: Enviroment):
         span_aux = Span(0, 0, self.file_map)
@@ -103,6 +104,71 @@ class Semantic:
     def check_ast(self, ast: Program, is_expr: bool) -> None | ZonType:
         scope: Enviroment = ast.scope
         self.pre_scan(ast, scope)
+        self.has_main = scope.exist("main")
+        def error_if_is_block_expr(expr: NodeExpr):
+            if isinstance(expr, BlockExpr):
+                self.diag.emit(
+                    ErrorCode.E3051, None, [stmt.span],
+                    [(Span(stmt.span.end-1, stmt.span.end, self.file_map), "blocks cannot be used as expressions here.")]
+                )
+                return
+            
+            elif isinstance(expr, IfForm):
+                #ERROR
+                return
+            
+            elif isinstance(expr, BinaryExpr):
+                error_if_is_block_expr(expr.left)
+                error_if_is_block_expr(expr.right)
+                
+            elif isinstance(expr, UnaryExpr):
+                error_if_is_block_expr(expr.value)
+                
+            elif isinstance(expr, LiteralNode):
+                return
+        
+        if self.has_main:
+            for stmt in ast.stmts:
+                if isinstance(stmt, DeclarationStmt):
+                    self.diag.emit(
+                        ErrorCode.E3035, None, [stmt.span],
+                        [(stmt.span_name, "global variables must be initialized at declaration.")]
+                    )
+                    
+                elif isinstance(stmt, AssignmentStmt):
+                    self.diag.emit(
+                        ErrorCode.E3039, None, [stmt.span],
+                        [(stmt.span_name, "assignments are only permitted inside functions in structured mode.")]
+                    )
+                    error_if_is_block_expr(stmt.value)
+                    
+                elif isinstance(stmt, IfForm):
+                    self.diag.emit(
+                        ErrorCode.E3047, None, [stmt.span],
+                        [(Span(stmt.span.end-1, stmt.span.end, self.file_map), "control flow statements cannot appear at top level.")]
+                    )
+                
+                elif isinstance(stmt, WhileForm):
+                    self.diag.emit(
+                        ErrorCode.E3048, None, [stmt.span],
+                        [(Span(stmt.span.end-1, stmt.span.end, self.file_map), "loops are only valid inside functions.")]
+                    )
+                
+                elif isinstance(stmt, CallFunc):
+                    self.diag.emit(
+                        ErrorCode.E3049, None, [stmt.span],
+                        [(stmt.span_name, "function calls are only allowed inside other functions.")]
+                    )
+                
+                elif isinstance(stmt, BlockExpr):
+                    self.diag.emit(
+                        ErrorCode.E3050, None, [stmt.span],
+                        [(Span(stmt.span.end-1, stmt.span.end, self.file_map), "stray block found at top level.")]
+                    )
+                    
+                elif isinstance(stmt, InitializationStmt):
+                    error_if_is_block_expr(stmt.assign_stmt.value)
+                    
         self.evaluate_statements(ast.stmts, scope, is_expr=is_expr)
         return None
 

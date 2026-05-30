@@ -85,6 +85,50 @@ if [[ "$1" == "vw" && "$2" == "--file" ]]; then
     if [ -f "$3" ]; then cat "$3"; exit 0; else echo "[zon error]: File not found."; exit 1; fi
 fi
 
+if [[ "$1" == "vw" && "$2" == "--zonasm" ]]; then
+    FILE=$3
+    TARGET_PATH=""
+    if [ -f "$FILE" ]; then
+        TARGET_PATH="$FILE"
+    elif [ -f "$CONFIG_FILE" ]; then
+        GLOBAL_DIR=$(cat "$CONFIG_FILE" | xargs)
+        if [ -f "$GLOBAL_DIR/$FILE" ]; then
+            TARGET_PATH="$GLOBAL_DIR/$FILE"
+        fi
+    fi
+
+    if [ -z "$TARGET_PATH" ]; then
+        echo "[ X_X] <(\"Error: File '$FILE' not found locally or in PATH.\")"
+        exit 1
+    fi
+    
+    build_vm_if_needed
+
+    case "$TARGET_PATH" in
+        *.zbc) 
+            "$MAIN_PY" vw --zonasm "$TARGET_PATH"
+            ;;
+        *.zon)
+            python3 "$MAIN_PY" c "$TARGET_PATH"
+            if [ $? -eq 0 ]; then
+                BYTECODE="${TARGET_PATH%.zon}.zbc"
+                if [ -f "$BYTECODE" ]; then
+                    "$MAIN_PY" vw --zonasm "$BYTECODE"
+                else
+                    exit 1
+                fi
+            else
+                exit 1
+            fi
+            ;;
+        *) 
+            echo "[ X_X] <(\"Invalid extension.\")"
+            exit 1 
+            ;;
+    esac
+    exit 0
+fi
+
 if [[ "$1" == "repl" && "$2" != "--in" ]]; then
     build_vm_if_needed
     TEMP_ZBC=$(mktemp --suffix=.zbc)
@@ -95,14 +139,20 @@ if [[ "$1" == "repl" && "$2" != "--in" ]]; then
     else
         python3 "$MAIN_PY" repl "$TEMP_ZBC" "$2"
     fi
+
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
     
+    VM_EXIT_CODE=0
     if [[ $? -eq 0 && -s "$TEMP_ZBC" ]]; then
         "$BINARY_VM" "$TEMP_ZBC"
+        VM_EXIT_CODE=$?
     fi
-    exit 0
+    exit $VM_EXIT_CODE
 fi
 
-CONFIG_FILE="$HOME/.zonetic_config"
+CONFIG_FILE="$HOME/.zonconfig"
 
 if [ "$1" == "r" ]; then
     FILE=$2
@@ -122,18 +172,35 @@ if [ "$1" == "r" ]; then
     fi
     
     build_vm_if_needed
+    
+    VM_EXIT_CODE=0
+
     case "$TARGET_PATH" in
-        *.zbc) "$BINARY_VM" "$TARGET_PATH" ;;
+        *.zbc) 
+            "$BINARY_VM" "$TARGET_PATH" 
+            VM_EXIT_CODE=$?
+            ;;
         *.zon)
             python3 "$MAIN_PY" c "$TARGET_PATH"
             if [ $? -eq 0 ]; then
                 BYTECODE="${TARGET_PATH%.zon}.zbc"
-                [ -f "$BYTECODE" ] && "$BINARY_VM" "$BYTECODE" || exit 1
+                if [ -f "$BYTECODE" ]; then
+                    "$BINARY_VM" "$BYTECODE"
+                    VM_EXIT_CODE=$?
+                else
+                    exit 1
+                fi
+            else
+                exit 1
             fi
             ;;
-        *) echo "[ X_X] <(\"Invalid extension.\")"; exit 1 ;;
+        *) 
+            echo "[ X_X] <(\"Invalid extension.\")"
+            exit 1 
+            ;;
     esac
-    exit 0
+
+    exit $VM_EXIT_CODE
 fi
 
 if [[ "$1" == "st" && "$2" == "--zbc" ]]; then

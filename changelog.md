@@ -3,6 +3,57 @@
 All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
+## v2.4.0 — *The Function Update 2.0*
+
+> This version introduces formal procedural execution, stack frame isolation, cross-platform hardware-level memory protection, and binary format formalization. Zonetic now officially supports robust recursion, structured data segments, and optimized runtime printing.
+
+**Procedural Execution & Stack Management**
+
+* **Structured Control Flow (`JALR`)** — Integration of the `JALR` instruction to handle indirect jumps, enabling dynamic function routing and proper return paths.
+* **Function Life Cycle Archetype** — Implementation of complete function prologues and epilogues to automatically manage context execution.
+* **Dedicated Frame Pointer (`x8 / fp`)** — Redefined the `x8` register exclusively as a Frame Pointer (`fp`) to track local stack boundaries, while `x1` (`ra`) manages the return address.
+* **Stack Memory Opcodes** — Added native support for doubleword memory storage and retrieval via `SD` (Store Doubleword) and `LD` (Load Doubleword).
+* **Floating-Point Memory Opcodes** — Added native support for `FSD` (Float Store Double) and `FLD` (Float Load Double) to manage floating-point variables within stack frames.
+
+**Register Spilling Optimization**
+
+* **Context Spilling Architecture** — The compiler now spills temporary and saved registers (both integer and floating-point) directly into the stack when register pressure is high.
+* **Dedicated Auxiliary Registers** — Registers `x31` and `f31` have been decoupled from standard temporary allocation and are now reserved as dedicated hardware helpers for stack loading operations.
+* **Reusable Stack Slots** — Implemented an optimization pass for stack offset reusability. Spilled temporaries share memory slots based on their lifetime, preventing linear stack bloat and maximizing allocation efficiency.
+
+**The Extended `.zbc` Binary Format & Headers**
+
+* **Fixed 64-Byte Header** — Replaced the primitive magic number check with a formal 64-byte binary header to support structural validation.
+* **Header Architecture Map**:
+  * **Bytes 0–5**: Magic Number (`ZON!o\0` / `\0o!NOZ` in Little Endian).
+  * **Byte 6**: Execution flags.
+  * **Byte 7**: Version identifier (initialized at `0`).
+  * **Bytes 8–11**: `.text` section size (4 bytes).
+  * **Bytes 12–15**: `.data` section size (4 bytes).
+  * **Bytes 16–19**: Constant pool size (4 bytes).
+  * **Bytes 20–63**: 40-byte zero-filled padding reserved for future backward-compatible expansions.
+* **Binary Segmentation** — The runtime now splits and maps the executable into clear, back-to-back sections: `.text` (code), followed by `.data` (global memory), and ending with the Constant Pool.
+
+**Global Data Segment & Execution Modes**
+
+* **Global Pointer Integration (`x3 / gp`)** — Fully activated the `x3` (`gp`) register to manage absolute addressing for the newly added `.data` segment.
+* **Execution Mode Bifurcation**:
+  * **Main Function Mode** — Triggered when a formal `main` function is defined. Global variables are strictly initialized via explicit statement constraints, mapped to `.data`, and modifiable by internal scopes if marked as `mut`.
+  * **Top-to-Bottom Scripting Mode** — Retained for flexible, lightweight procedural execution paths without a structural `main` anchor.
+
+**Hardware-Level Stack Protection & Runtimes**
+
+* **Hardware-Enforced Stack Limits** — Configured a rigid 128KB stack limit mapped directly against physical CPU pages via low-level OS allocation, replacing slow software boundaries.
+* **Asynchronous Signal Guard** — Integrated native platform hooks (`mprotect` and `sigaction` via POSIX on UNIX; `VirtualProtect` and Vectored Exception Handling on Windows) to trap memory access violations on a zero-overhead guard page, isolating infinite recursion.
+* **Tail Call Optimization (TCO)** — Maintained recursive loop compression for tail calls, drastically lowering stack allocation requirements for continuous execution loops.
+
+**Compiler Diagnostics & Refinements**
+
+* **Levenshtein Distance Fix** — Patched a semantic analysis subroutine within the spelling suggestion algorithm to properly display compiler diagnostic hints.
+* **Optimized Input/Output ECALLs** — Streamlined `IPRINT`, `FPRINT`, and `BPRINT` services inside the VM by bypassing dynamic formatting allocation in favor of raw buffer insertion and fixed precision layout.
+
+---
+
 ## v2.3.0 — *The 64-bit Precision Update*
 
 > This version marks the architectural shift to full 64-bit dominance. By expanding the word size, implementing a unified Constant Pool, and integrating the RISC-V "D" extension, Zonetic now handles massive integers and high-precision physics data with "industrial-grade" stability.

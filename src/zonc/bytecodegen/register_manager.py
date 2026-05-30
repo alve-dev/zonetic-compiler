@@ -6,8 +6,8 @@ class RegisterManager:
         # x31 y f31 son tx6 y tf11 pero se usaran como comodin para
         # la carga de offsets temps
         
-        self.temps = [5, 6, 7, 28, 29, 30]
-        self.ftemps = [0, 1, 2, 3, 4, 5, 6, 7, 28, 29, 30]
+        self.temps = [5, 6, 7, 28, 29]
+        self.ftemps = [0, 1, 2, 3, 4, 5, 6, 7, 28, 29]
         self.offset_stack = offset_stack
         self.used_temps = [True] * len(self.temps)
         self.used_ftemps = [True] * len(self.ftemps)
@@ -21,11 +21,11 @@ class RegisterManager:
             
         if self.free_spill_offsets:
             recycled_offset = self.free_spill_offsets.pop()
-            return ZonVar(None, None, ZonType(0, "UNKNOWN"), recycled_offset)
+            return ZonVar(None, RegT.X, ZonType(0, "UNKNOWN"), recycled_offset)
         
-        current_offset = self.offset_stack[-1]
-        self.offset_stack[-1] -= 8
-        return ZonVar(None, None, ZonType(0, "UNKNOWN"), current_offset)
+        current_offset = self.offset_stack[-1][0]
+        self.offset_stack[-1][0] -= 8
+        return ZonVar(None, RegT.X, ZonType(0, "UNKNOWN"), offset_stack=current_offset)
     
     def alloc_ftemp(self):
         for i in range(len(self.ftemps)):
@@ -35,11 +35,11 @@ class RegisterManager:
             
         if self.free_spill_offsets:
             recycled_offset = self.free_spill_offsets.pop()
-            return ZonVar(None, None, ZonType(0, "UNKNOWN"), recycled_offset)
+            return ZonVar(None, RegT.F, ZonType(0, "UNKNOWN"), recycled_offset)
         
-        current_offset = self.offset_stack[-1]
-        self.offset_stack[-1] -= 8
-        return ZonVar(None, None, ZonType(0, "UNKNOWN"), current_offset)
+        current_offset = self.offset_stack[-1][0]
+        self.offset_stack[-1][0] -= 8
+        return ZonVar(None, RegT.F, ZonType(0, "UNKNOWN"), offset_stack=current_offset)
 
     def free_temp(self, reg: ZonVar):
         if reg.reg is None:
@@ -57,3 +57,21 @@ class RegisterManager:
                     if self.ftemps[i] == reg.reg:
                         self.used_ftemps[i] = True
                         break
+    
+    def get_active_regs(self):
+        current_used_x = []
+        
+        i = 0
+        for is_used in self.used_temps:
+            if not is_used:
+                i += 1
+                
+        current_used_x = self.temps[:i]
+        
+        i = 0
+        for is_used in self.used_ftemps:
+            if not is_used:
+                i += 1
+                
+        return (current_used_x, self.ftemps[:i])
+        

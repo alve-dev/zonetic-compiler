@@ -625,6 +625,19 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
                change its value, or call a method, but don't 
                leave it standing alone in the rain.")"""
     ),
+    
+    ErrorCode.E2033 : ErrorDefinition(
+      error_code=ErrorCode.E2033,
+      severity=Severity.ERROR,
+      message="Explicit return type is barred on main.",
+      note="""
+      In Zonetic, the `main` function implicitly sets its return type 
+      to `int64` to communicate with the OS. Explicit return arrows 
+      are barred here to maintain structural consistency.""",
+      zonny="""
+      [ o_o] <("Main is special and it always returns an int64 behind your back. 
+               Delete that `->` and its type right now!")"""
+    ),
         
     ErrorCode.E3001 : ErrorDefinition(
       error_code=ErrorCode.E3001,
@@ -1170,6 +1183,18 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
                  You can't override it here.")"""
     ),
     
+    ErrorCode.E3035 : ErrorDefinition(
+        error_code=ErrorCode.E3035,
+        severity=Severity.ERROR,
+        message="Top-level declaration without initializer is not allowed.",
+        note="""
+        In structured mode (`func main()`), all top-level variables must have
+        an initial value. Empty declarations are forbidden.""",
+        zonny="""
+        [ >_<] <("You can't declare a global without giving it a value.
+                 Try: `inmut NUM2 = 0` or `mut NUM2 = 42`")"""
+    ),
+    
     ErrorCode.E3036 : ErrorDefinition(
         error_code=ErrorCode.E3036,
         severity=Severity.ERROR,
@@ -1203,6 +1228,18 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
         Structs are registered through pre-scan and reachable from anywhere in the program.""",
         zonny="""
         [ o_0] <("`{name}` is not a struct I know about. Check the name or declare the struct first.")"""
+    ),
+    
+    ErrorCode.E3039 : ErrorDefinition(
+        error_code=ErrorCode.E3039,
+        severity=Severity.ERROR,
+        message="Top-level assignment is not allowed.",
+        note="""
+        In mode with `func main()`, all mutations must happen inside functions
+        to keep initialization order predictable and safe.""",
+        zonny="""
+        [ ~_~] <("Move this assignment inside `main()` or another function.
+                 Top-level mutations are blocked to avoid chaos.")"""
     ),
     
     ErrorCode.E3040 : ErrorDefinition(
@@ -1280,6 +1317,70 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
                  Remove this and keep only field declarations.")"""
     ),
     
+    ErrorCode.E3047 : ErrorDefinition(
+        error_code=ErrorCode.E3047,
+        severity=Severity.ERROR,
+        message="Top-level 'if' form is not allowed.",
+        note="""
+        In Zonetic, only declarations and function definitions are permitted 
+        at top-level when using `func main()`. All executable code must live 
+        inside functions.""",
+        zonny="""
+        [ >_<] <("if form can't float around freely! Move this inside 
+                 `main()` or another function where it can actually run.")"""
+    ),
+    
+    ErrorCode.E3048 : ErrorDefinition(
+        error_code=ErrorCode.E3048,
+        severity=Severity.ERROR,
+        message="Top-level 'while' form is not allowed.",
+        note="""
+        In Zonetic, top-level code is restricted to maintain predictable 
+        initialization and clear program structure. Loops must be placed 
+        inside a function body.""",
+        zonny="""
+        [ ~_~] <("While you're at it, move this loop inside a function. 
+                 Top-level while loops are not permitted in structured mode.")"""
+    ),
+    
+    ErrorCode.E3049 : ErrorDefinition(
+        error_code=ErrorCode.E3049,
+        severity=Severity.ERROR,
+        message="Top-level function call is not allowed.",
+        note="""
+        In Zonetic, top-level execution is disabled when `func main()` 
+        is present. All side effects and function calls must happen inside 
+        executable scopes.""",
+        zonny="""
+        [ o_o] <("You can't just call functions in the open! Move this call 
+                 inside `main()` or another function.")"""
+    ),
+    
+    ErrorCode.E3050 : ErrorDefinition(
+        error_code=ErrorCode.E3050,
+        severity=Severity.ERROR,
+        message="Top-level block expression is not allowed.",
+        note="""
+        In Zonetic, when using `func main()`, only declarations and function 
+        definitions are allowed at the top level. Loose blocks are not 
+        permitted.""",
+        zonny="""
+        [ >_<] <("A floating block with no purpose? Move everything inside 
+                 `main()` or delete this empty block.")"""
+    ),
+    
+    ErrorCode.E3051 : ErrorDefinition(
+        error_code=ErrorCode.E3051,
+        severity=Severity.ERROR,
+        message="Block expression in global initializer is not allowed.",
+        note="""
+        In Zonetic, complex block expressions are restricted in structured 
+        mode to keep stack management simple and predictable.""",
+        zonny="""
+        [ o_o] <("You can't initialize a variable with a whole block. 
+                 Move that code inside `main()` and assign the result normally.")"""
+    ),
+        
     ErrorCode.E4001 : ErrorDefinition(
       error_code=ErrorCode.E4001,
       severity=Severity.ERROR,
@@ -1397,4 +1498,15 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
     ),
 }
 
-
+  
+  # Official Zonny Faces
+  #
+  # [ o_o] -> Neutral
+  # [ o_0] -> Suspicion / Skepticism
+  # [ 0_0] -> Surprise
+  # [ ~_~] -> Annoyed / Disgusted
+  # [ x_x] -> Dead / Knocked Out
+  # [ >_<] -> Frustrated / Cringing
+  # [ ^_^] -> Happy / Joyful
+  # [ ⌐■_■]b -> Pro / Relax
+  

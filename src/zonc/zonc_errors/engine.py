@@ -4,6 +4,7 @@ from .severity import Severity
 from zonc.location_file import Span
 from .diagnostic import Diagnostic
 from .renderer import DiagnosticRenderer
+import sys
 
 class DiagnosticEngine:
     ERROR_OCCURRENCE = {
@@ -57,6 +58,7 @@ class DiagnosticEngine:
         ErrorCode.E2030 : 0,
         ErrorCode.E2031 : 0,
         ErrorCode.E2032 : 0,
+        ErrorCode.E2033 : 0,
         
         ErrorCode.W2001 : 0,
         
@@ -106,6 +108,11 @@ class DiagnosticEngine:
         ErrorCode.E3044 : 0,
         ErrorCode.E3045 : 0,
         ErrorCode.E3046 : 0,
+        ErrorCode.E3047 : 0,
+        ErrorCode.E3048 : 0,
+        ErrorCode.E3049 : 0,
+        ErrorCode.E3050 : 0,
+        ErrorCode.E3051 : 0,
         
         ErrorCode.W3001 : 0,
         ErrorCode.W3002 : 0,
@@ -218,6 +225,8 @@ class DiagnosticEngine:
             if count_err + count_warn == 10:
                 print(f"... and {self.count_errors - count_err} more errors, plus {self.count_warnings - count_warn} more warnings; I recommend resolving errors from the top down, sometimes there are cascading errors.")
                 break
+            
+        sys.exit(1)
             
 
 

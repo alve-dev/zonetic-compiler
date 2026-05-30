@@ -13,26 +13,6 @@ class ConstantFolding:
     def __init__(self, reporter: DiagnosticEngine):
         self.reporter = reporter
         
-    def visit_Print(self, node: CallFunc, scope: Enviroment):
-        # por ahora hago esto para mejorar el print
-        # el print es especial por eso tendre constant folding para el
-        # por ahora sera simple de operacion, cuando agruege stirngs a la vm
-        # sera mas agresivo volviendo todo string si se puede
-        # ademas constant folding de llamadas sera aparte
-        if node.params is not None:
-            span = node.params[0].span
-            folded_param = self.evaluate_static_value(node.params[0], scope, True)
-            new_param = self.transform_to_zonvalue(folded_param)
-            new_param.span = span
-            if isinstance(new_param, IntLiteral):
-                if not self.check_range_int(new_param.value, "int64", span):
-                    node.params[0] = new_param
-            
-            elif isinstance(new_param, FloatLiteral):
-                if not self.check_range_float(new_param.value, "double", span):
-                    node.params[0] = new_param
-        
-    
     def visit_If(self, node: IfForm, scope: Enviroment):
         folded_cond_if = self.evaluate_static_value(node.if_branch.cond, scope)
         new_cond = self.transform_to_zonvalue(folded_cond_if)
@@ -267,7 +247,8 @@ class ConstantFolding:
             case VariableExpr():
                 symbol = scope.get_symbol(node.name)
                 if not symbol.mutability:
-                    return self.evaluate_static_value(symbol.value, scope, in_var)
+                    if not symbol.is_empty:
+                        return self.evaluate_static_value(symbol.value, scope, in_var)
                 return node
             
             case UnaryExpr():
@@ -295,6 +276,10 @@ class ConstantFolding:
                 if not node.else_branch is None:
                     self.visit_Program(node.else_branch.block)
                     
+                return node
+            
+            case CallFunc():
+                self.visit_CallFunc(node, scope)
                 return node
                 
             case _:
@@ -369,9 +354,63 @@ class ConstantFolding:
             
         return False
     
-    def visit_Program(self, node: Program | BlockExpr):
+    def visit_CallFunc(self, node: CallFunc, scope: Enviroment):
+        self.keyparams_pos(node, scope)
+        if node.params is not None:
+            for i in range(len(node.params)):
+                span = node.params[i].span
+                folded_param = self.evaluate_static_value(node.params[i], scope, True)
+                new_param = self.transform_to_zonvalue(folded_param)
+                new_param.span = span
+                if isinstance(new_param, IntLiteral):
+                    if not self.check_range_int(new_param.value, "int64", span):
+                        node.params[i] = new_param
+                
+                elif isinstance(new_param, FloatLiteral):
+                    if not self.check_range_float(new_param.value, "double", span):
+                        node.params[i] = new_param
+                    
+    def keyparams_pos(self, node: CallFunc, scope: Enviroment):
+        if node.name == "print":
+            return
+        
+        func_symbol = scope.get_symbol(node.name)
+        new_params = [0] * len(func_symbol.params)
+        if node.params is not None:
+            for i, param in enumerate(node.params):
+                new_params[i] = param
+                
+        if node.keyparams is not None:
+            for key, value in node.keyparams.items():
+                indice = 0
+                for i, param in enumerate(func_symbol.params):
+                    if key == param.name:
+                        indice = i
+                        break
+                        
+                new_params[indice] = value[0]
+        
+        node.params = new_params
+        
+    def pre_scan(self, node: Program, scope: Enviroment):
+        for stmt in node.stmts:
+            if isinstance(stmt, FuncForm):
+                if stmt.return_type.num == 5:
+                    stmt.block_expr.stmts.append(ReturnStmt(None, None))
+                
+                if stmt.params is not None:
+                    for param in stmt.params:
+                        symbol = Symbol(param.mut, param.zontype, True, param.span)
+                        scope.define(param.name, symbol)
+                
+                func_symbol = FuncSymbol(stmt.params, stmt.span, stmt.span_name, stmt.return_type)  
+                scope.define(stmt.name, func_symbol)
+                
+        
+    def visit_Program(self, node: Program | BlockExpr, top_level: bool = False):
         scope: Enviroment = node.scope
         scope.values.clear()
+        if top_level: self.pre_scan(node, node.scope)
         
         for stmt in node.stmts:
             if isinstance(stmt, DeclarationStmt):
@@ -404,8 +443,10 @@ class ConstantFolding:
                 return value
             
             elif isinstance(stmt, CallFunc):
-                if stmt.name == "print":
-                    self.visit_Print(stmt, scope)
+                self.visit_CallFunc(stmt, scope)
+                    
+            elif isinstance(stmt, FuncForm):
+                self.visit_Program(stmt.block_expr)
             
             else:
                 return None

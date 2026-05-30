@@ -148,7 +148,8 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
         if cmd == "ast":
             print_ast(root_node)
             return
-        
+            
+            
         # Semantic
         semantic_checker = Semantic(diagnostic, file_map)
         semantic_checker.check_ast(root_node, False)
@@ -156,9 +157,19 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
         if diagnostic.has_errors():
             diagnostic.display()
             diagnostic.clear_engine()
-            return
+            
         
+        constant_folding = ConstantFolding(diagnostic)
+        constant_folding.visit_Program(root_node, True)
         
+        if diagnostic.has_errors():
+            diagnostic.display()
+            diagnostic.clear_engine()
+            
+        
+        dce = DeadCodeElimination()
+        dce.eliminate_in_program(root_node)
+    
         chrono_compiler.stop()
             
         # Interpreter
@@ -281,7 +292,7 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
         return
     
     constant_folding = ConstantFolding(diagnostic)
-    constant_folding.visit_Program(root_node)
+    constant_folding.visit_Program(root_node, True)
     
     if diagnostic.has_errors():
         diagnostic.display()
@@ -293,13 +304,7 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
     
             
     em = Emitter()
-    em.emit_preamble(root_node.stmts)
-    for stmt in root_node.stmts:
-        em.generate_stmt(stmt)
-    
-    em.epilogue()
-    em.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 93)
-    em.emit_ecall()
+    em.generate_program_entry(root_node.stmts)
     
     if direct_zbc is None:
         em.save(path_name.with_suffix(".zbc"))

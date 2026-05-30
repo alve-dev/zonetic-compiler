@@ -12,6 +12,8 @@ class ZonVar:
     regt: RegT | None
     zontype: ZonType
     offset_stack: int | None = None
+    is_global: bool = False
+    offset_global: int | None = None
 
 class SymbolTable:
     def __init__(self):
@@ -25,6 +27,9 @@ class SymbolTable:
     def exit_scope(self):
         self.scopes.pop()
 
+    def define_global(self, name, offset_global, zontype):
+        self.scopes[-1].update({name : ZonVar(reg=None, regt=None, zontype=zontype, is_global=True, offset_global=offset_global)})
+    
     def define(self, name, zontype):
         used_registers = set()
         for scope in self.scopes:
@@ -35,7 +40,7 @@ class SymbolTable:
         for r in self.saved:
             if r not in used_registers:
                 self.scopes[-1][name] = ZonVar(r, RegT.X, zontype)
-                return r
+                return ZonVar(r, RegT.X, zontype)
                 
         return None
     
@@ -59,7 +64,17 @@ class SymbolTable:
                 return scope.get(name)
     
     def delete_symbol(self, name):
-        del self.scopes[-1][name]
+        for scope in reversed(self.scopes):
+            if name in scope:
+                del scope[name]
+                break
+            
+    def exists(self, name):
+        for scope in reversed(self.scopes):
+            if name in scope:
+                return True
+                
+        return False
     
     def exists_here(self, name):
         if name in self.scopes[-1]:

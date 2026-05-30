@@ -95,11 +95,11 @@ class ErrorCode(Enum):
     E3032 = auto()
     E3033 = auto()
     E3034 = auto()
-    E3035 = auto() # Libre
+    E3035 = auto()
     E3036 = auto()
     E3037 = auto()
     E3038 = auto()
-    E3039 = auto() # Libre
+    E3039 = auto()
     E3040 = auto()
     E3041 = auto()
     E3042 = auto()
@@ -107,6 +107,13 @@ class ErrorCode(Enum):
     E3044 = auto()
     E3045 = auto()
     E3046 = auto()
+    E3047 = auto()
+    E3048 = auto()
+    E3049 = auto()
+    E3050 = auto()
+    E3051 = auto()
+    
+    
     
     
     # Semantics Warnings

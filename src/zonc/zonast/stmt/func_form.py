@@ -22,9 +22,30 @@ class FuncForm(NodeStmt):
         self.span = span
         
     def get_details(self):
-        return f"{self.name}() -> {self.return_type.name}"
+        firma = f"{self.name}("
+        if self.params is not None:
+            param_len = len(self.params)
+            for i, param in enumerate(self.params):
+                if i != 0:
+                    firma += ", "
+                
+                if param.mut:
+                    firma += "mut "
+                else:
+                    firma += "inmut "
+                    
+                firma += param.name
+                
+                firma += f": {param.zontype.name}"
+                
+                if param.default is not None:
+                    firma += f" = {param.default.value}"
+                    
+                if i == param_len-1: break
+                
+        firma += f") -> {self.return_type.name}"
+        return firma
     
     def get_children(self):
         children = [self.block_expr]
-        if not self.params is None: children.insert(0, self.params)
         return children

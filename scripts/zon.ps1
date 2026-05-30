@@ -92,16 +92,18 @@ if ($args[0] -eq "repl" -and $args[1] -ne "--in") {
         python "$MainPy" repl "$TempZbcPath" $args[1]
     }
 
+    $VmExitCode = 0
     if ($LASTEXITCODE -eq 0 -and (Test-Path $TempZbcPath)) {
         & "$BinaryVm" "$TempZbcPath"
+        $VmExitCode = $LASTEXITCODE
         Remove-Item $TempZbcPath -ErrorAction SilentlyContinue
     }
-    exit 0
+    exit $VmExitCode
 }
 
 if ($args[0] -eq "r") {
     $File = $args[1]
-    $ConfigFile = "$HOME\.zonetic_config"
+    $ConfigFile = "$HOME\.zonconfig"
     $TargetPath = ""
 
     if (Test-Path $File) {
@@ -121,13 +123,21 @@ if ($args[0] -eq "r") {
     Build-VmIfNeeded
     $Extension = [System.IO.Path]::GetExtension($TargetPath)
 
+    $VmExitCode = 0
+
     switch ($Extension) {
-        ".zbc" { & "$BinaryVm" "$TargetPath" }
+        ".zbc" { 
+            & "$BinaryVm" "$TargetPath"
+            $VmExitCode = $LASTEXITCODE
+        }
         ".zon" {
             python "$MainPy" c "$TargetPath"
             if ($LASTEXITCODE -eq 0) {
                 $Bytecode = $TargetPath -replace '\.zon$', '.zbc'
-                if (Test-Path $Bytecode) { & "$BinaryVm" "$Bytecode" }
+                if (Test-Path $Bytecode) { 
+                    & "$BinaryVm" "$Bytecode" 
+                    $VmExitCode = $LASTEXITCODE
+                }
             }
         }
         Default { Write-Host "[ X_X] <(`"Invalid extension.`")" ; exit 1 }

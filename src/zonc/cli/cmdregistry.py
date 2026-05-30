@@ -80,6 +80,10 @@ COMMANDS = {
             Flag(
                 name="--zbc <path>",
                 description="Create a file(.zbc) (and necessary folders) and start interactive writing."
+            ),
+            Flag(
+                name="--max-recursion <MAX_RECURSION_NUM>",
+                description="extends the maximum recursion of the language to the indicated number, a maximum of 5,000"
             )
         ]
     ),
@@ -134,7 +138,13 @@ COMMANDS = {
         area="rebuild",
         summary="Recompile the virtual machine",
         usage="zon rebuild",
-        category="manag"
+        category="manag",
+        flags=[
+            Flag(
+                name="--debug",
+                description="Recompile the VM using the -g flag of g++, for VM debugging"
+            )
+        ]
     ),
     
     "update": CmdInfo(

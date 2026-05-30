@@ -67,10 +67,15 @@ class Parser:
                     TokenType.KEYWORD_FUNC, TokenType.KEYWORD_RETURN, TokenType.KEYWORD_GIVE,
                     TokenType.KEYWORD_CONTINUE, TokenType.KEYWORD_BREAK, TokenType.KEYWORD_STRUCT
                 ): return
-                elif block and self.check(TokenType.RBRACE): return
+                elif block and self.check(TokenType.RBRACE): 
+                    self.advance()
+                    return
                 else: self.advance()
             else:
-                if self.match_token_type(*stop): return
+                if self.match_token_type(*stop): 
+                    if self.check(TokenType.RBRACE):
+                        self.advance()
+                    return
                 else: self.advance()
     
     def check(self, type: TokenType) -> bool:
@@ -600,11 +605,23 @@ class Parser:
         self.advance()
         
         return_type: ZonType
-        if self.check(TokenType.ARROW):
+        if name._value == "main" and self.check(TokenType.ARROW):
+            span_err = Span(start, self.tokens._list[self.position]._span.end, self.file_map)
+            self.diag.emit(
+                ErrorCode.E2033, None, [span_err],
+                [(self.tokens._list[self.position]._span, "remove this return type syntax. Main always returns an implicit int64.")]
+            )
+            self.synchronize(block, [TokenType.RBRACE])
+            return ErrorNode(Span(0, 0, self.file_map))
+        
+        elif name._value == "main":
+            return_type = ZonType(1, "int64")
+            
+        elif self.check(TokenType.ARROW):
             self.advance()
             zontype_token = self.tokens._peek(self.position)
             match zontype_token._type:
-                case TokenType.KEYWORD_INT64: return_type = ZonType(1, "int")
+                case TokenType.KEYWORD_INT64: return_type = ZonType(1, "int64")
                 case TokenType.KEYWORD_FLOAT: return_type = ZonType(2, "float")
                 case TokenType.KEYWORD_BOOL: return_type = ZonType(3, "bool")
                 case TokenType.KEYWORD_STRING: return_type = ZonType(4, "string")
@@ -629,14 +646,15 @@ class Parser:
                         [(span, "a valid return type or `void` was expected here{leven}")])
                         self.synchronize(block, [TokenType.LBRACE])
                         return ErrorNode(Span(0, 0, self.file_map))
+                    
+            self.advance()
+            
         else:
             token = self.tokens._peek(self.position)
             span = self.get_error_span(token)
             self.diag.emit(ErrorCode.E2021, { "token" : token._value }, [span], [(span, "`->` was expected here to declare the return type")])
             self.synchronize(block, [TokenType.LBRACE])
-            return ErrorNode(Span(0, 0, self.file_map))
-        
-        self.advance()
+            return ErrorNode(Span(0, 0, self.file_map))    
         
         block_expr = self._consume_block(scope, False, block)
         if isinstance(block_expr, ErrorNode): return block_expr
@@ -846,7 +864,6 @@ class Parser:
             self.advance()
             
             if self.check(TokenType.LITERAL_IDENT):
-                # Si ya teníamos un campo anterior, lo empaquetamos en el nodo (Left-Recursive)
                 if last_field_token is not None:
                     node = FieldExpr(
                         object_name=node, 
@@ -854,7 +871,6 @@ class Parser:
                         span=Span(node.span.start, last_field_token._span.end, self.file_map)
                     )
                 
-                # Actualizamos el último campo encontrado
                 last_field_token = self.tokens._peek(self.position)
                 self.advance()
             
@@ -876,7 +892,6 @@ class Parser:
             TokenType.OPERATOR_MOD_ASSIGN,
             TokenType.OPERATOR_POW_ASSIGN
         ):
-            # Parseamos la asignación utilizando solo el ÚLTIMO campo como target
             assignment = self.parse_assignment(
                 scope, 
                 last_field_token._value, 
