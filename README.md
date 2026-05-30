@@ -1,7 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/icons/svg/icon_zonetic_dark.svg">
   <img src="./assets/icons/svg/icon_zonetic.svg" width="300">
-</picture>
+</picture> 
 
 # Zonetic Programming Language
 
