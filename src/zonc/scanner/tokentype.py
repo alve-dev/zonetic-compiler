@@ -34,6 +34,15 @@ class TokenType(Enum):
     GATE_OR = auto()
     GATE_NOT = auto()
     
+    # Bit-Wise GATES
+    BIT_AND = auto()
+    BIT_XOR = auto()
+    BIT_OR = auto()
+    BIT_NOT = auto()
+    BIT_NAND = auto()
+    BIT_NOR = auto()
+    BIT_XNOR = auto()
+    
     
     # Operators
     OPERATOR_PLUS = auto()
@@ -51,6 +60,13 @@ class TokenType(Enum):
     OPERATOR_MOD_ASSIGN = auto()
     OPERATOR_DIV_ASSIGN = auto()
     
+    OPERATOR_AND_ASSIGN = auto()
+    OPERATOR_OR_ASSIGN = auto()
+    OPERATOR_BAND_ASSIGN = auto()
+    OPERATOR_BOR_ASSIGN = auto()
+    OPERATOR_BXOR_ASSIGN = auto()
+
+    
     OPERATOR_EQUAL = auto()
     OPERATOR_NOT_EQUAL = auto()
     OPERATOR_GREATER = auto()
@@ -58,6 +74,12 @@ class TokenType(Enum):
     OPERATOR_LESS = auto()
     OPERATOR_LESS_EQUAL = auto()
     
+    OPERATOR_SHIFT_LEFT = auto()
+    OPERATOR_SHIFT_RIGHT = auto()
+    
+    OPERATOR_CONCAT = auto()
+    OPERATOR_EQUAL_STR = auto()
+    OPERATOR_NOT_EQUAL_STR = auto()
     
     # Special Simbols
     COLON = auto()

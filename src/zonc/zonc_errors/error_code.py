@@ -56,6 +56,7 @@ class ErrorCode(Enum):
     E2031 = auto()
     E2032 = auto()
     E2033 = auto()
+    E2034 = auto()
     
     # Parser Warnings
     W2001 = auto()

@@ -18,7 +18,7 @@ A statically typed, expression-oriented language designed for robotics and perfo
 
 ## Status
 
-> **Current Version:** `v2.4.0` — *The Function Update 2.0* > **Next Milestone:** `v2.5.0` — *The Heap Update*
+> **Current Version:** `v2.5.0` — *The Heap Update* > **Next Milestone:** `v2.6.0` — *The ByteCodeGen Refactor Update*
 
 ## Features
 
@@ -66,14 +66,17 @@ In vm:
 ```bash
 alve-dev@dev-zonetic:~/.zonetic$ zon repl
 [zon info]: Repl Mode. Type 'EOF' or Ctrl+D to end.
->> print(10)
+>> println("Hello from VM Mode")
 >> EOF
-10
+Hello from VM Mode
 ```
+## Zonetic VM(RISC-V)
+
+> VM Zonetic repository -> [zonetic-vm](https://github.com/alve-dev/zonetic-vm)
 
 ## Documentation
 
-> Full language documentation → [zonetic-official-docs](https://github.com/alve-dev/zonetic-official-docs)
+> Full language documentation -> [zonetic-official-docs](https://github.com/alve-dev/zonetic-official-docs)
 
 ## Installation
 
@@ -85,4 +88,4 @@ Zonetic 2.0.0 uses a modular installation. The compiler and VM are synchronized 
 * **macOS:** *Coming soon (Testing in progress)*
 
 ![Language](https://img.shields.io/badge/written%20in-Python-yellow)
-[![Version](https://img.shields.io/badge/version-2--4--0-orange)](changelog.md)
+[![Version](https://img.shields.io/badge/version-2--5--0-orange)](changelog.md)

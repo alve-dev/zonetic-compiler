@@ -3,11 +3,13 @@ from enum import IntEnum
 class OpCode(IntEnum):
     L = 0x03
     FL = 0x07
+    OP_STR = 0x0B
     OP_IMM = 0x13
     AUIPC = 0x17
     OP_IMM_32 = 0x1B
     OP_S = 0x23
     OP_FS = 0x27
+    OP_IMM_STR = 0x2B
     OP = 0x33
     OP_32 = 0x3B
     LUI = 0x37
@@ -18,9 +20,11 @@ class OpCode(IntEnum):
 
 class F3_ALU(IntEnum):
     ADD_SUB = 0x00
+    SLL_SLLI = 0x01
     SLT_SLTI = 0x02
     SLTU_SLTIU = 0x03
     XOR_XORI = 0x04
+    SRL_SRLI_SRA_SRAI = 0x05
     OR_ORI = 0x06
     AND_ANDI = 0x07
 
@@ -48,6 +52,13 @@ class F3_FS(IntEnum):
     
 class F3_S(IntEnum):
     SD = 0x3
+    
+class F3_STR(IntEnum):
+    CONCAT = 0x00
+    CMP = 0x01
+    
+class F7_STR(IntEnum):
+    STANDARD = 0x00
 
 class F7(IntEnum):
     STANDARD = 0x00

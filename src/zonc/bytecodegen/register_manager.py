@@ -23,9 +23,11 @@ class RegisterManager:
             recycled_offset = self.free_spill_offsets.pop()
             return ZonVar(None, RegT.X, ZonType(0, "UNKNOWN"), recycled_offset)
         
+        bytes_needed = self.offset_stack[-1][1]
         current_offset = self.offset_stack[-1][0]
+        fp_offset = -(bytes_needed - current_offset)
         self.offset_stack[-1][0] -= 8
-        return ZonVar(None, RegT.X, ZonType(0, "UNKNOWN"), offset_stack=current_offset)
+        return ZonVar(None, RegT.X, ZonType(0, "UNKNOWN"), offset_stack=fp_offset)
     
     def alloc_ftemp(self):
         for i in range(len(self.ftemps)):
@@ -37,9 +39,11 @@ class RegisterManager:
             recycled_offset = self.free_spill_offsets.pop()
             return ZonVar(None, RegT.F, ZonType(0, "UNKNOWN"), recycled_offset)
         
+        bytes_needed = self.offset_stack[-1][1]
         current_offset = self.offset_stack[-1][0]
+        fp_offset = -(bytes_needed - current_offset)
         self.offset_stack[-1][0] -= 8
-        return ZonVar(None, RegT.F, ZonType(0, "UNKNOWN"), offset_stack=current_offset)
+        return ZonVar(None, RegT.F, ZonType(0, "UNKNOWN"), offset_stack=fp_offset)
 
     def free_temp(self, reg: ZonVar):
         if reg.reg is None:

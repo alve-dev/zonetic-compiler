@@ -17,6 +17,8 @@ BINARY_VM="$VM_DIR/zonvm"
 INCLUDE_VM_DIR="$VM_DIR/include"
 SRC_VM_DIR="$VM_DIR/src"
 
+CONFIG_FILE="$HOME/.zonconfig"
+
 build_vm_if_needed() {
     if [ ! -f "$BINARY_VM" ]; then
         echo "[ ⌐■_■] <(\"Building the VM engine at $VM_DIR...\")"
@@ -152,8 +154,6 @@ if [[ "$1" == "repl" && "$2" != "--in" ]]; then
     exit $VM_EXIT_CODE
 fi
 
-CONFIG_FILE="$HOME/.zonconfig"
-
 if [ "$1" == "r" ]; then
     FILE=$2
     TARGET_PATH=""
@@ -190,7 +190,7 @@ if [ "$1" == "r" ]; then
                 else
                     exit 1
                 fi
-            else
+            else 
                 exit 1
             fi
             ;;

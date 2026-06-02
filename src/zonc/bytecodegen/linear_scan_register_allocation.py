@@ -117,8 +117,30 @@ class LinearScanRegisterAllocation:
 
             case AssignmentStmt():
                 self._scan_node(node.value)
+                
+            case CastExpr():
+                self._scan_node(node.value)
+                if node.zontype.num in [2,7]:
+                    self._free_ft()
+                    self._alloc_ft()
+                else:
+                    self._free_t()
+                    self._alloc_t()
+                
+            case StringLiteral():
+                self._alloc_t()
+                self._free_t()
 
             case BinaryExpr():
+                if node.operator in (Operator.CONCAT, Operator.EQ_STR, Operator.NE_STR,
+                         Operator.BNAND, Operator.BNOR, Operator.BXNOR):
+                    self._scan_node(node.left)
+                    self._scan_node(node.right)
+                    self._free_t()
+                    self._free_t()
+                    self._alloc_t()
+                    return
+                
                 if node.operator in [Operator.ADD, Operator.SUB]:
                     if isinstance(node.right, IntLiteral) and (-2048 <= node.right.value <= 2047):
                         self._scan_node(node.left)
@@ -213,4 +235,8 @@ class LinearScanRegisterAllocation:
             case FloatLiteral():
                 self._alloc_ft()
                 self._alloc_t()
-                self._free_t() 
+                self._free_t()
+                
+            case StringLiteral():
+                self._alloc_t()
+                self._free_t()

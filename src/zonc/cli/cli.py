@@ -110,6 +110,15 @@ def run_cli():
                     
                 cmd_zon_run(path[0], "ast")
                 
+            case "--ast-o":
+                path = args[2:]
+                if len(path) < 1:
+                    print("[zon error]: No file specified for the ast command.")
+                    print("--Usage zon vw --ast-o <path>")
+                    sys.exit(1)
+                    
+                cmd_zon_run(path[0], "asto")
+                
             case "--tokens":
                 path = args[2:]
                 if len(path) < 1:

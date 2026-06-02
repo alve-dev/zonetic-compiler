@@ -36,7 +36,7 @@ class ConstantFolding:
             new_node = self.transform_to_zonvalue(folded)
             new_node.span = span
             new_value = new_node
-        
+            
         symbol = Symbol(node.decl_stmt.mut, node.decl_stmt.type, False, node.decl_stmt.span)
         scope.define(node.decl_stmt.name, symbol)
         
@@ -61,7 +61,10 @@ class ConstantFolding:
         elif isinstance(new_node, BoolLiteral):
             node.assign_stmt.value = new_value
             symbol.value = new_node if True else False
-            
+        
+        elif isinstance(new_node, CallFunc):
+            return
+        
         else:
             node.assign_stmt.value = new_value
             symbol.value = new_node
@@ -104,6 +107,9 @@ class ConstantFolding:
             node.value = new_value
             symbol.value = new_node if True else False
             
+        elif isinstance(new_node, CallFunc):
+            return
+            
         else:
             node.value = new_value
             symbol.value = new_node
@@ -142,8 +148,6 @@ class ConstantFolding:
                                         return node
                                     return left / right
 
-                                
-                                    
                                 if right == 0:
                                     self.reporter.emit(
                                         ErrorCode.E5001, None, [node.span], [(node.right.span, "constant folding evaluated this divisor to zero")]
@@ -187,6 +191,47 @@ class ConstantFolding:
                             case Operator.NE:
                                 return left != right
                             
+                            case Operator.BAND:
+                                return left & right
+                            
+                            case Operator.BXOR:
+                                return left ^ right
+                            
+                            case Operator.BOR:
+                                return left | right
+                            
+                            case Operator.BNAND:
+                                return ~(left & right)
+                            
+                            case Operator.BXNOR:
+                                return ~(left ^ right)
+                            
+                            case Operator.BNOR:
+                                return ~(left | right)
+                            
+                            case Operator.SL | Operator.SR:
+                                if right < 0 or right > 63:
+                                    print("ERROR de shift temporal")
+                                    return 0
+                                
+                                if node.operator == Operator.SL:
+                                    resultado = (left << right) & 0xFFFFFFFFFFFFFFFF
+                                    if resultado >= 0x8000000000000000:
+                                        return resultado - 0x10000000000000000
+                                    return resultado
+                                
+                                else:
+                                    if left < 0 or (left & (1 << 63)):
+                                        left_signado = left if left < 0 else left - (1 << 64)
+                                        resultado = left_signado >> right
+                                    else:
+                                        resultado = left >> right
+                                        
+                                    resultado_64 = resultado & 0xFFFFFFFFFFFFFFFF
+                                    if resultado_64 >= 0x8000000000000000:
+                                        return resultado_64 - 0x10000000000000000
+                                    return resultado_64
+    
                             # recordar poner POW
                             
 
@@ -204,6 +249,17 @@ class ConstantFolding:
                             return left == right
                         
                         case Operator.NE:
+                            return left != right
+                        
+                elif isinstance(left, str) and isinstance(right, str):
+                    match node.operator:
+                        case Operator.CONCAT:
+                            return left + right
+                        
+                        case Operator.EQ_STR:
+                            return left == right
+                        
+                        case Operator.NE_STR:
                             return left != right
                         
                 node.left = self.transform_to_zonvalue(left)
@@ -244,17 +300,22 @@ class ConstantFolding:
             case BoolLiteral():
                 return True if node.value else False
 
+            case StringLiteral():
+                return node.value
+            
             case VariableExpr():
                 symbol = scope.get_symbol(node.name)
                 if not symbol.mutability:
-                    if not symbol.is_empty:
+                    if not symbol.is_empty and symbol.value is not None:
                         return self.evaluate_static_value(symbol.value, scope, in_var)
                 return node
             
             case UnaryExpr():
                 value = self.evaluate_static_value(node.value, scope, in_var)
-                if isinstance(value, (int, float)) and node.operator == Operator.NEG:
-                    return -(value)
+                if isinstance(value, (int, float)):
+                    match node.operator:
+                        case Operator.NEG: return -(value)
+                        case Operator.BNOT: return ~(value)
                 
                 elif isinstance(value, bool) and node.operator == Operator.NOT:
                     return (not value)
@@ -263,7 +324,8 @@ class ConstantFolding:
                 return node
 
             case BlockExpr():
-                return (node, self.visit_Program(node))
+                self.visit_Program(node)
+                return node
             
             case IfForm():
                 self.visit_If(node, scope)
@@ -281,7 +343,31 @@ class ConstantFolding:
             case CallFunc():
                 self.visit_CallFunc(node, scope)
                 return node
+            
+            case CastExpr():
+                value = self.evaluate_static_value(node.value, scope, in_var)
                 
+                if node.zontype.num == 1:
+                    if isinstance(value, bool):
+                        return 1 if value else 0
+                    
+                    elif isinstance(value, int):
+                        return value
+                    
+                    else:
+                        return node
+                    
+                elif node.zontype.num == 3:
+                    if isinstance(value, bool):
+                        return value
+                    
+                    elif isinstance(value, int):
+                        return True if value != 0 else False
+                    
+                    else:
+                        return node
+                    
+            
             case _:
                 return node
 
@@ -289,6 +375,7 @@ class ConstantFolding:
         if isinstance(value, int) and not isinstance(value, bool): return IntLiteral(value)
         if isinstance(value, float): return FloatLiteral(value)
         if isinstance(value, bool): return BoolLiteral(1 if value else 0)
+        if isinstance(value, str): return StringLiteral(value)
         else: return value
                 
     def check_range_int(self, new_value, target_type, span) -> bool:
@@ -369,28 +456,32 @@ class ConstantFolding:
                 elif isinstance(new_param, FloatLiteral):
                     if not self.check_range_float(new_param.value, "double", span):
                         node.params[i] = new_param
+                        
+                else:
+                    node.params[i] = new_param
                     
     def keyparams_pos(self, node: CallFunc, scope: Enviroment):
-        if node.name == "print":
+        if node.name in ["print", "alloc", "store", "load", "println"]:
             return
         
-        func_symbol = scope.get_symbol(node.name)
-        new_params = [0] * len(func_symbol.params)
         if node.params is not None:
-            for i, param in enumerate(node.params):
-                new_params[i] = param
-                
-        if node.keyparams is not None:
-            for key, value in node.keyparams.items():
-                indice = 0
-                for i, param in enumerate(func_symbol.params):
-                    if key == param.name:
-                        indice = i
-                        break
-                        
-                new_params[indice] = value[0]
+            func_symbol = scope.get_symbol(node.name)
+            new_params = [0] * len(func_symbol.params)
+            if node.params is not None:
+                for i, param in enumerate(node.params):
+                    new_params[i] = param
+                    
+            if node.keyparams is not None:
+                for key, value in node.keyparams.items():
+                    indice = 0
+                    for i, param in enumerate(func_symbol.params):
+                        if key == param.name:
+                            indice = i
+                            break
+                            
+                    new_params[indice] = value[0]
         
-        node.params = new_params
+            node.params = new_params
         
     def pre_scan(self, node: Program, scope: Enviroment):
         for stmt in node.stmts:

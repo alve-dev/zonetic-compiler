@@ -36,6 +36,8 @@ class Semantic:
     def insert_std(self, scope: Enviroment):
         span_aux = Span(0, 0, self.file_map)
         scope.define("print", FuncSymbol([], span_aux, span_aux, ZonType(5, "void"), True, True))
+        scope.define("println", FuncSymbol([], span_aux, span_aux, ZonType(5, "void"), True, True))
+        
         scope.define("readInt", FuncSymbol(
             [Param(False, "prompt", ZonType(4, "string"), StringLiteral(" ", span_aux), span_aux, span_aux)],
             span_aux, span_aux, ZonType(1, "int"), True, False))
@@ -45,6 +47,28 @@ class Semantic:
         scope.define("readString", FuncSymbol(
             [Param(False, "prompt", ZonType(4, "string"), StringLiteral(" ", span_aux), span_aux, span_aux)],
             span_aux, span_aux, ZonType(4, "string"), True, False))
+        
+        scope.define("alloc", FuncSymbol(
+            [Param(False, "size", ZonType(1, "int64"), None, span_aux, span_aux)],
+            span_aux, span_aux, ZonType(1, "int64"), True, False))
+        
+        scope.define("store", FuncSymbol(
+            [Param(False, "ptr", ZonType(1, "int64"), None, span_aux, span_aux),
+             Param(False, "value", ZonType(1, "int64"), None, span_aux, span_aux)],
+            span_aux, span_aux, ZonType(5, "void"), True, False))
+        
+        scope.define("load", FuncSymbol(
+            [Param(False, "ptr", ZonType(1, "int64"), None, span_aux, span_aux)],
+            span_aux, span_aux, ZonType(1, "int64"), True, False))
+        
+        scope.define("len", FuncSymbol(
+            [Param(False, "s", ZonType(4, "string"), None, span_aux, span_aux)],
+            span_aux, span_aux, ZonType(4, "string"), True, False))
+        
+        
+        
+        
+    # alloc, store, y load borrarlos despues, solo funciones std falsas provisionales que actuan como punteros
           
     TYPE_TABLE = {}
 
@@ -811,6 +835,25 @@ class Semantic:
         elif isinstance(expr, BoolLiteral): return ZonType(3, "bool")
         elif isinstance(expr, StringLiteral): return ZonType(4, "string")
         
+        elif isinstance(expr, CastExpr):
+            val_type = self.infer_expr(expr.value, scope, name=name)
+            if val_type.num == 0: return zontype_err
+            
+            if expr.zontype.num == 1:
+                return self.check_operands_type(
+                    ((val_type, expr.value.span),),
+                    ZonType(1, "int64"), False, "int64()",
+                    ZonType(1, "int64"), ZonType(3, "bool"), ZonType(7, "double")
+                )
+                
+            elif expr.zontype.num == 3:
+                return self.check_operands_type(
+                    ((val_type, expr.value.span),),
+                    ZonType(3, "bool"), False, "bool()",
+                    ZonType(1, "int64"), ZonType(3, "bool")
+                )
+                
+        
         elif isinstance(expr, BinaryExpr):
             op = expr.operator
             left_type = self.infer_expr(expr.left, scope, name=name)
@@ -836,7 +879,17 @@ class Semantic:
             elif op in (Operator.EQ, Operator.NE):
                 op_str = {Operator.EQ: '==', Operator.NE: '!='}[op]
                 return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), ZonType(3, "bool"), True, op_str, ZonType(1, "int64"), ZonType(2, "float"), ZonType(3, "bool"), ZonType(6, "int32"), ZonType(7, "double"))
-                
+            
+            elif op in (Operator.BAND, Operator.BXOR, Operator.BOR, Operator.SL, Operator.SR, Operator.BNAND, Operator.BNOR, Operator.BXNOR):
+                op_str = {Operator.BAND: 'band/&', Operator.BXOR: 'bxor/^', Operator.BOR: 'bor/|', Operator.SL: '<<', Operator.SR: '>>',
+                          Operator.BNAND: 'bnand/~&', Operator.BNOR: 'bnor/~|', Operator.BXNOR: 'bxnor/~^'}[op]
+                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), left_type, False, op_str, ZonType(1, "int64"), ZonType(6, "int32"))
+            
+            elif op in (Operator.CONCAT, Operator.EQ_STR, Operator.NE_STR):
+                op_str = {Operator.CONCAT: '++', Operator.EQ_STR: '===', Operator.NE_STR: '!=='}[op]
+                return self.check_operands_type(((left_type, expr.left.span), (right_type, expr.right.span)), left_type, False, op_str, ZonType(4, "string"))
+            
+            
         elif isinstance(expr, UnaryExpr):
             op = expr.operator
             value_type = self.infer_expr(expr.value, scope, name=name)
@@ -845,6 +898,10 @@ class Semantic:
             
             if op == Operator.NEG:
                 return self.check_operands_type(((value_type, expr.value.span),), value_type, False, '-', ZonType(1, "int64"), ZonType(2, "float"), ZonType(6, "int32"), ZonType(7, "double"))
+            
+            elif op == Operator.BNOT:
+                return self.check_operands_type(((value_type, expr.value.span),), value_type, False, 'bnot/~', ZonType(1, "int64"), ZonType(6, "int32"))
+            
             else:
                 return self.check_operands_type(((value_type, expr.value.span),), value_type, False, 'not/!', ZonType(3, "bool"))
         

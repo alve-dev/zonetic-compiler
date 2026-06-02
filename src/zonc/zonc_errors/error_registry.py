@@ -638,6 +638,16 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
       [ o_o] <("Main is special and it always returns an int64 behind your back. 
                Delete that `->` and its type right now!")"""
     ),
+    
+    ErrorCode.E2034 : ErrorDefinition(
+      error_code=ErrorCode.E2034,
+      severity=Severity.ERROR,
+      message="Invalid cast syntax — expected `(` after cast type and a matching `)",
+      note="""In Zonetic, casts always use parentheses: `type(expr).""",
+      zonny="""
+      [ >_<] <("Ahhh! You're hurting my parser! A cast without parentheses is like a robot without bolts — it falls apart. 
+               Put the value inside `(` and `)`. Please. For my sanity.")"""
+    ),
         
     ErrorCode.E3001 : ErrorDefinition(
       error_code=ErrorCode.E3001,

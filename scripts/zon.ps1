@@ -7,6 +7,8 @@ $BinaryVm = "$VmDir\zonvm.exe"
 $IncludeVmDir = "$VmDir\include"
 $SrcVmDir = "$VmDir\src"
 
+$ConfigFile = "$HOME\.zonconfig"
+
 function Build-VmIfNeeded {
     if (!(Test-Path $BinaryVm)) {
         Write-Host "[ ⌐■_■] <(`"Building the VM engine at $VmDir...`")"
@@ -81,6 +83,51 @@ if ($args[0] -eq "vw" -and $args[1] -eq "--file") {
     else { Write-Host "[zon error]: File not found." ; exit 1 }
 }
 
+if ($args[0] -eq "vw" -and $args[1] -eq "--zonasm") {
+    $File = $args[2]
+    
+    $TargetPath = ""
+
+    if (Test-Path $File) {
+        $TargetPath = (Resolve-Path $File).Path
+    } elseif (Test-Path $ConfigFile) {
+        $GlobalDir = Get-Content $ConfigFile
+        if (Test-Path "$GlobalDir\$File") {
+            $TargetPath = "$GlobalDir\$File"
+        }
+    }
+
+    if (!$TargetPath) {
+        Write-Host "[ X_X] <(`"Error: File '$File' not found locally or in PATH.`")"
+        exit 1
+    }
+
+    Build-VmIfNeeded
+    $Extension = [System.IO.Path]::GetExtension($TargetPath)
+
+    switch ($Extension) {
+        ".zbc" { 
+            python "$MainPy" vw --zonasm "$TargetPath"
+        }
+        ".zon" {
+            python "$MainPy" c "$TargetPath"
+            if ($LASTEXITCODE -eq 0) {
+                $Bytecode = $TargetPath -replace '\.zon$', '.zbc'
+                if (Test-Path $Bytecode) { 
+                    python "$MainPy" vw --zonasm "$Bytecode"
+                }
+                else {
+                    exit 1
+                }
+            }
+        }
+        Default { Write-Host "[ X_X] <(`"Invalid extension.`")" ; exit 1 }
+    }
+    exit 0
+
+
+}
+
 if ($args[0] -eq "repl" -and $args[1] -ne "--in") {
     Build-VmIfNeeded
     $TempZbc = New-TemporaryFile
@@ -103,7 +150,7 @@ if ($args[0] -eq "repl" -and $args[1] -ne "--in") {
 
 if ($args[0] -eq "r") {
     $File = $args[1]
-    $ConfigFile = "$HOME\.zonconfig"
+    
     $TargetPath = ""
 
     if (Test-Path $File) {
@@ -142,7 +189,7 @@ if ($args[0] -eq "r") {
         }
         Default { Write-Host "[ X_X] <(`"Invalid extension.`")" ; exit 1 }
     }
-    exit 0
+    exit $VmExitCode
 }
 
 if ($args[0] -eq "st" -and $args[1] -eq "--zbc") {

@@ -28,6 +28,20 @@ def decode_instruction(binary: int, pc: int) -> str:
                 return "ebreak"
         return f".word 0x{binary:08x}"
     
+    if opcode == 0b0001011:
+        funct3 = (binary >> 12) & 0x7
+        funct7 = (binary >> 25) & 0x7F
+        rd = (binary >> 7) & 0x1F
+        rs1 = (binary >> 15) & 0x1F
+        rs2 = (binary >> 20) & 0x1F
+        
+        if funct7 == 0x00:
+            if funct3 == 0x00:
+                return f"str.concat {reg_name(rd)}, {reg_name(rs1)}, {reg_name(rs2)}"
+            
+            elif funct3 == 0x01:
+                return f"str.eq {reg_name(rd)}, {reg_name(rs1)}, {reg_name(rs2)}"
+    
     if opcode == 0b0110111:
         rd = (binary >> 7) & 0x1F
         imm = (binary >> 12) & 0xFFFFF
@@ -138,6 +152,8 @@ def decode_instruction(binary: int, pc: int) -> str:
         if funct3 == 0b001 or funct3 == 0b101:
             if funct7 == 0b0100000:
                 op_name = "sra"
+            else:
+                op_name = "srl"
         elif funct7 == 0b0100000:
             op_name = "sub"
         
@@ -186,9 +202,9 @@ def disassemble_file(filename: str):
         print(f"=== Zon VM Disassembly ===")
         print(f"Version: {version}")
         print(f"Entry point: 0x{entry_point:x}")
-        print(f"Text size: {text_size} bytes ({text_size//4} instructions)")
-        print(f"Data size: {data_size} bytes")
-        print(f"Pool size: {pool_size} bytes")
+        print(f".text size: {text_size} bytes ({text_size//4} instructions)")
+        print(f".data size: {data_size} bytes")
+        print(f".rodata size: {pool_size} bytes")
         print(f"\n--- .text section ---")
         
         f.read(40) # padding
@@ -202,7 +218,7 @@ def disassemble_file(filename: str):
             pc += 4
             
         if pool_size > 0:
-            print(f"\n--- Constant pool (size: {pool_size} bytes) ---")
+            print(f"\n--- .rodata section (size: {pool_size} bytes) ---")
             print(f"{'Offset':<12}{'Raw Hex':<20}{'As Int64':<22}{'As Double':<22}{'Dump (ASCII)'}")
             
             pool_pc = 0

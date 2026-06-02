@@ -45,7 +45,11 @@ KEYWORDS = {
         "func" : TokenType.KEYWORD_FUNC,
         "void" : TokenType.KEYWORD_VOID,
         "return" : TokenType.KEYWORD_RETURN,
-        "struct" : TokenType.KEYWORD_STRUCT
+        "struct" : TokenType.KEYWORD_STRUCT,
+        "band" : TokenType.BIT_AND,
+        "bxor" : TokenType.BIT_XOR,
+        "bor" : TokenType.BIT_OR,
+        "bnot" : TokenType.BIT_NOT,
     }
 
 def get_target_path(filename):
@@ -169,6 +173,10 @@ def cmd_zon_run(rute_script: str = " ", cmd: str = "run", code_source: str = Non
         
         dce = DeadCodeElimination()
         dce.eliminate_in_program(root_node)
+        
+        if cmd == "asto":
+            print_ast(root_node)
+            return
     
         chrono_compiler.stop()
             

@@ -3,6 +3,51 @@
 All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
+## v2.5.0 — *The Heap Update*
+
+> This version introduces the initial dynamic memory management subsystem through a deterministic Scope-Based Arena Heap, full support for extended ASCII immutable and dynamic strings, and advanced expression parsing. Zonetic now features native expression-level `if` evaluations, strict hardware-level explicit casting, unique bitwise-logical naming semantics, a unified 16MB monolithic runtime memory map, and high-performance custom ISA string extensions.
+
+**Dynamic Memory & The Scope-Based Arena Heap**
+
+* **Deterministic Arena Architecture** — Implemented a streamlined, high-performance Heap based on stacked Arenas mapped directly to local block scopes. Allocation occurs linearly via instantaneous pointer bumps, using scoped `push` and `pop` lifecycles to completely eliminate fragmentation and the necessity of slow, manual `free()` subroutines.
+* **Unified 16MB Runtime RAM** — Refactored the entire C++ Virtual Machine memory topology, consolidating instructions, global data, stack, and the new heap segments into a single, cohesive 16MB monolithic RAM array to maximize cache locality and simplify hardware emulated addressing.
+* **Optimized Dynamic Memory ECALLs** — Integrated dedicated low-level runtime environment calls to handle high-frequency `heap_push` and `heap_pop` boundary updates directly via the VM execution core.
+
+**Native Extended ASCII String Subsystem**
+
+* **Immutable String Deduplication (`.rodata`)** — Literal and immutable strings are formally allocated within the newly formalized `.rodata` segment. The compiler emitter utilizes an internal string-pooling dictionary to cross-reference identical literals, reusing memory addresses to prevent static binary bloat.
+* **Extended ASCII Standard & C-Compatibility** — Established Extended ASCII as the immutable, high-efficiency encoding standard for Zonetic text processing. Strings are strictly null-terminated (`\0`) for seamless C-interoperability, while the Lexer actively bans raw `\0` literal injections to guarantee memory safety.
+* **Dynamic Heap Strings & Constraints** — Dynamic string manipulations are routed directly onto the Arena Heap. In this baseline phase, strict safety invariants are maintained: heap-allocated strings cannot be returned out of scope, length attributes (`len`) remain encapsulated, and dynamic reallocation is strictly controlled.
+* **Custom ISA String Extensions** — Extended the base instruction set with non-standard RISC-V hardware instructions to offload text operations from heavy software loops:
+  * `str.concat` (*R-Type, Opcode: 0x0B, F3: 0x00, F7: 0x00*) — Hardware-level reference combining.
+  * `str.eq` (*R-Type, Opcode: 0x0B, F3: 0x01, F7: 0x00*) — Hardware-accelerated string byte comparison.
+
+**Bitwise & Logical Hardware Primitives**
+
+* **Strict Bitwise-Logical Semantic Separation** — Introduced an explicit naming convention to separate control-flow logic from raw bit manipulation, preventing silent structural bugs. Boolean operations use `and`, `or`, and `not`, while bitwise operations are explicitly bound to keyword-token twins: `band` (`&`), `bor` (`|`), `bxor` (`^`), and `bnot` (`~`).
+* **Bitwise Shift Primitives** — Full native emitter integration for logical left shift (`<<`) and right shift (`>>`) operators.
+* **Universal Gate Syntactic Sugar** — Integrated native bitwise shorthand representation for universal logic gates. The compiler transparently maps `bnand` (`~&`), `bnor` (`~|`), and `bxnor` (`~^`) into inverted bitwise operations (e.g., `~(a & b)`) without adding AST complexity.
+* **Compound Assignment Operators** — Added syntactic shorthand for register-modifying expressions. Supports bitwise compound assignments (`&=`, `|=`, `^=`) and boolean control-flow short-circuit compounds (`&&=`, `||=`).
+
+**Conditional Expressions & Explicit Type Casting**
+
+* **Conditional Block Expressions (`if expr`)** — Upgraded `if-else` blocks into evaluation-level expressions capable of returning values. Leverages the `give` keyword to yield data out of a localized block directly into a destination register.
+* **Zero Implicit Coercion & Explicit Casting** — Enforced rigid type isolation to prevent silent truncation. All cross-type operations must be explicitly cast by the programmer:
+  * `int64()` — Sign-extended 64-bit integer conversion. Booleans evaluate to `1` or `0` via an optimized `ADDI` (Move) pass.
+  * `bool()` — Boolean evaluation mapping. Implemented a zero-overhead runtime pass via `SLTU` against `x0`, correctly converting signed negative numbers (e.g., `bool(-5)`) to `true` in exactly 1 hardware instruction cycle.
+
+**Compiler Diagnostics & CLI Architecture**
+
+* **Post-Optimization AST Inspection (`--ast-o`)** — Expanded the Command Line Interface with the `--ast-o` flag. While `--ast` dumps the raw post-parser tree, `--ast-o` outputs the highly optimized AST after undergoing Semantic Analysis, Constant Folding, and Dead Code Elimination (DCE).
+* **Multi-Argument System Printing** — Upgraded `print` and the newly introduced `println` into variadic multi-argument operations. The compiler breaks down multi-argument sequences into a continuous chain of individual, high-performance print evaluations.
+* **High-Range ECALL Vectoring** — Redesigned the virtual machine's ECALL mapping layout. To prevent overlapping with standard RISC-V environment vectors, custom runtime calls are directed to negative registers and ranges above `1900`, preserving the 12-bit `ADDI` immediate boundary. Includes `SPRINT` for string structures and `EPRINT` for executing standard newline insertions (`\n`).
+
+**Refinements & Infrastructure Fixes**
+
+* **Windows Provisioning Script (`zon.ps1`)** — Fixed an infrastructure bug inside the PowerShell update automation utility. Replaced an incompatible networking cmdlet with a robust alternative, stabilizing the `zon update` workflow on Windows host environments.
+
+---
+
 ## v2.4.0 — *The Function Update 2.0*
 
 > This version introduces formal procedural execution, stack frame isolation, cross-platform hardware-level memory protection, and binary format formalization. Zonetic now officially supports robust recursion, structured data segments, and optimized runtime printing.

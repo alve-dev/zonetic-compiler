@@ -29,6 +29,22 @@ class Operator(Enum):
     GE = auto()  # `>=`, Greater or Equal
     LE = auto()  # `<=`, Less or Equal
     
+    BAND = auto() # band / &, bitwise and
+    BXOR = auto() # bxor / ^, bitwise xor
+    BOR = auto() # bor / |, bitwise or
+    BNOT = auto() # bnot / ~, bitwise not
+    
+    SL = auto() # <<, shift left operator
+    SR = auto() # >>, shift right operator
+    
+    CONCAT = auto() # ++, concat operator
+    EQ_STR = auto() # ===, eq str operator
+    NE_STR = auto() # !==, not eq str operator 
+    
+    BNAND = auto() # bnand / ~&, bitwise nand
+    BXNOR = auto() # bxnor / ~^, bitwise xnor
+    BNOR = auto() # bnor / ~|, bitwise nor
+    
     def get_details(self):
         match self.value:
             case 1: return '+'
@@ -47,4 +63,16 @@ class Operator(Enum):
             case 14: return '<'
             case 15: return '>='
             case 16: return '<='
+            case 17: return 'band/&'
+            case 18: return 'bxor/^'
+            case 19: return 'bor/|'
+            case 20: return 'bnot/~'
+            case 21: return '<<'
+            case 22: return '>>'
+            case 23: return '++'
+            case 24: return '==='
+            case 25: return '!=='
+            case 26: return 'bnand/~&'
+            case 27: return 'bxnor/~^'
+            case 28: return 'bnor/~|'
     

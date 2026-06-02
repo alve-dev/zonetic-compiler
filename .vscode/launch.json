@@ -11,9 +11,9 @@
             "request": "launch",
             "module": "zonc.main",
             "env" : {
-                "PYTHONPATH" : "src"
+                "PYTHONPATH" : ".zonc/src"
             },
-            "args" : ["repl", "--debug"],
+            "args" : ["r", "test.zon", "--debug"],
         }
     ]
 }

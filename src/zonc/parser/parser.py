@@ -13,7 +13,12 @@ class Parser:
         TokenType.OPERATOR_MULT_ASSIGN : Operator.MUL,
         TokenType.OPERATOR_DIV_ASSIGN : Operator.DIV,
         TokenType.OPERATOR_MOD_ASSIGN : Operator.MOD,
-        TokenType.OPERATOR_POW_ASSIGN : Operator.POW
+        TokenType.OPERATOR_POW_ASSIGN : Operator.POW,
+        TokenType.OPERATOR_AND_ASSIGN : Operator.AND,
+        TokenType.OPERATOR_OR_ASSIGN : Operator.OR,
+        TokenType.OPERATOR_BAND_ASSIGN : Operator.BAND,
+        TokenType.OPERATOR_BOR_ASSIGN : Operator.BOR,
+        TokenType.OPERATOR_BXOR_ASSIGN : Operator.BXOR,
     }
     
     TOKEN_TO_OPERATOR = {
@@ -30,7 +35,20 @@ class Parser:
         TokenType.OPERATOR_NOT_EQUAL : Operator.NE,
         TokenType.GATE_OR : Operator.OR,
         TokenType.GATE_AND : Operator.AND,
-        TokenType.OPERATOR_POW : Operator.POW
+        TokenType.OPERATOR_POW : Operator.POW,
+        TokenType.BIT_AND : Operator.BAND,
+        TokenType.BIT_XOR : Operator.BXOR,
+        TokenType.BIT_OR : Operator.BOR,
+        TokenType.BIT_NOT : Operator.BNOT,
+        TokenType.OPERATOR_SHIFT_LEFT : Operator.SL,
+        TokenType.OPERATOR_SHIFT_RIGHT : Operator.SR,
+        TokenType.OPERATOR_CONCAT : Operator.CONCAT,
+        TokenType.OPERATOR_EQUAL_STR : Operator.EQ_STR,
+        TokenType.OPERATOR_NOT_EQUAL_STR : Operator.NE_STR,
+        TokenType.BIT_NAND : Operator.BNAND,
+        TokenType.BIT_NOR : Operator.BNOR,
+        TokenType.BIT_XNOR : Operator.BXNOR,
+        
     }
     
     LIST_TYPE = {}
@@ -928,35 +946,42 @@ class Parser:
         return self._parse_binary_expr(self.logic_and_expr, [TokenType.GATE_OR], scope, block)
     
     def logic_and_expr(self, scope: Enviroment, block: bool) -> Node:
-        return self._parse_binary_expr(self.logic_not_expr, [TokenType.GATE_AND], scope, block)
+        return self._parse_binary_expr(self.bit_wise_or, [TokenType.GATE_AND], scope, block)
+        
+    def bit_wise_or(self, scope: Enviroment, block: bool) -> None:
+        return self._parse_binary_expr(self.bit_wise_xor, [TokenType.BIT_OR, TokenType.BIT_NOR], scope, block)
     
-    def logic_not_expr(self, scope: Enviroment, block: bool) -> Node:
-        if self.check(TokenType.GATE_NOT):
-            start = self.tokens._peek(self.position)._span.start
-            self.advance()
-            value: Node = self.logic_not_expr(scope, block)
-            if isinstance(value, UnaryExpr) and value.operator == Operator.NOT:
-                return value.value
-            return UnaryExpr(Operator.NOT, value, Span(start, value.span.end, self.file_map))
-        return self.equality_expr(scope, block)
+    def bit_wise_xor(self, scope: Enviroment, block: bool) -> Node:
+        return self._parse_binary_expr(self.bit_wise_and, [TokenType.BIT_XOR, TokenType.BIT_XNOR], scope, block)
     
+    def bit_wise_and(self, scope: Enviroment, block: bool) -> Node:
+        return self._parse_binary_expr(self.equality_expr, [TokenType.BIT_AND, TokenType.BIT_NAND], scope, block)
+        
     def equality_expr(self, scope:Enviroment, block: bool) -> Node:
         return self._parse_binary_expr(
             self.comparison_expr,
-            [TokenType.OPERATOR_EQUAL, TokenType.OPERATOR_NOT_EQUAL],
+            [TokenType.OPERATOR_EQUAL, TokenType.OPERATOR_NOT_EQUAL, TokenType.OPERATOR_NOT_EQUAL_STR, TokenType.OPERATOR_EQUAL_STR],
             scope, block
         )
     
     def comparison_expr(self, scope: Enviroment, block: bool) -> Node:
         return self._parse_binary_expr(
-            self.term_expr,
+            self.shifts_expr,
             [TokenType.OPERATOR_GREATER, TokenType.OPERATOR_LESS, TokenType.OPERATOR_GREATER_EQUAL, 
              TokenType.OPERATOR_LESS_EQUAL],
             scope, block
         )
-        
+    
+    def shifts_expr(self, scope: Enviroment, block: bool) -> Node:
+        return self._parse_binary_expr(
+            self.term_expr,
+            [TokenType.OPERATOR_SHIFT_LEFT,
+             TokenType.OPERATOR_SHIFT_RIGHT],
+            scope, block
+        )
+    
     def term_expr(self, scope: Enviroment, block: bool) -> Node:
-        return self._parse_binary_expr(self.factor_expr, [TokenType.OPERATOR_PLUS, TokenType.OPERATOR_MINUS], scope, block)
+        return self._parse_binary_expr(self.factor_expr, [TokenType.OPERATOR_PLUS, TokenType.OPERATOR_MINUS, TokenType.OPERATOR_CONCAT], scope, block)
     
     def factor_expr(self, scope: Enviroment, block: bool) -> Node:
         return self._parse_binary_expr(self.unary_expr, [TokenType.OPERATOR_MULT, TokenType.OPERATOR_DIV, TokenType.OPERATOR_MOD], scope, block)
@@ -969,9 +994,27 @@ class Parser:
             if isinstance(value, UnaryExpr) and value.operator == Operator.NEG:
                 return value.value
             return UnaryExpr(Operator.NEG, value, Span(start, value.span.end, self.file_map))
+        
         elif self.check(TokenType.OPERATOR_PLUS):
             self.advance()
             return self.unary_expr(scope, block)
+        
+        elif self.check(TokenType.GATE_NOT):
+            start = self.tokens._peek(self.position)._span.start
+            self.advance()
+            value: Node = self.unary_expr(scope, block)
+            if isinstance(value, UnaryExpr) and value.operator == Operator.NOT:
+                return value.value
+            return UnaryExpr(Operator.NOT, value, Span(start, value.span.end, self.file_map))
+        
+        elif self.check(TokenType.BIT_NOT):
+            start = self.tokens._peek(self.position)._span.start
+            self.advance()
+            value: Node = self.unary_expr(scope, block)
+            if isinstance(value, UnaryExpr) and value.operator == Operator.BIT_NOT:
+                return value.value
+            return UnaryExpr(Operator.BNOT, value, Span(start, value.span.end, self.file_map))
+        
         else:
             return self.exponentiation_expr(scope, block)
     
@@ -1039,6 +1082,52 @@ class Parser:
             start = self.tokens._peek(self.position)._span.start
             self.advance()
             return self.parse_if_form(scope, True, start, block)
+        
+        elif self.check(TokenType.KEYWORD_INT64):
+            start_span = self.tokens._peek(self.position)._span.start
+            self.advance()
+            if self.check(TokenType.LPAREN):
+                self.advance()
+                val = self.expression(scope, block)
+                if self.check(TokenType.RPAREN):
+                    end_span = self.tokens._peek(self.position)._span.end
+                    self.advance()
+                    return CastExpr(
+                        val,
+                        ZonType(1, "int64"),
+                        Span(start_span, end_span, self.file_map)
+                    )
+                    
+            last_token = self.get_error_span(self.tokens._peek(self.position))
+            span_err = Span(start_span, last_token.end, self.file_map)
+            self.diag.emit(
+                ErrorCode.E2034, None, [span_err],
+                [(last_token,  "after a cast like `int64`, you need `(value)`.")]
+            )
+            return ErrorNode(Span(0, 0, self.file_map))
+        
+        elif self.check(TokenType.KEYWORD_BOOL):
+            start_span = self.tokens._peek(self.position)._span.start
+            self.advance()
+            if self.check(TokenType.LPAREN):
+                self.advance()
+                val = self.expression(scope, block)
+                if self.check(TokenType.RPAREN):
+                    end_span = self.tokens._peek(self.position)._span.end
+                    self.advance()
+                    return CastExpr(
+                        val,
+                        ZonType(3, "bool"),
+                        Span(start_span, end_span, self.file_map)
+                    )
+                    
+            last_token = self.get_error_span(self.tokens._peek(self.position))
+            span_err = Span(start_span, last_token.end, self.file_map)
+            self.diag.emit(
+                ErrorCode.E2034, None, [span_err],
+                [(last_token,  "after a cast like `bool`, you need `(value)`.")]
+            )
+            return ErrorNode(Span(0, 0, self.file_map))
         
         else:
             token = self.tokens._peek(self.position)

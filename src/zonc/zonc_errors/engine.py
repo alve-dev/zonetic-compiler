@@ -59,6 +59,7 @@ class DiagnosticEngine:
         ErrorCode.E2031 : 0,
         ErrorCode.E2032 : 0,
         ErrorCode.E2033 : 0,
+        ErrorCode.E2034 : 0,
         
         ErrorCode.W2001 : 0,
         

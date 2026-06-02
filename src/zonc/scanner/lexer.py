@@ -68,16 +68,28 @@ class Lexer:
     
     
     def _scan_plus(self):
-        self._match_next(
-            '=',
-            # Compound Addition Operator
-            TokenType.OPERATOR_PLUS_ASSIGN,
-            "+=",
-            
-            # Addition Operator
-            TokenType.OPERATOR_PLUS,
-            '+'
-        )
+        match self._peek(1):
+            case '+':
+                self._tokens._add(
+                    Token(
+                        TokenType.OPERATOR_CONCAT,
+                        '++',
+                        self._generic_span(2)
+                    )
+                )
+                self._advance(2)
+
+            case _:
+                self._match_next(
+                    '=',
+                    # Compound Addition Operator
+                    TokenType.OPERATOR_PLUS_ASSIGN,
+                    "+=",
+                    
+                    # Addition Operator
+                    TokenType.OPERATOR_PLUS,
+                    '+'
+                )
 
 
     def _scan_minus(self):
@@ -209,22 +221,43 @@ class Lexer:
     
     
     def _scan_equal(self):
-        self._match_next(
-            '=',
-            # Equal Operator
-            TokenType.OPERATOR_EQUAL,
-            "==",
+        match self._peek(1):
+            case '=':
+                self._advance(1)
+                self._match_next(
+                    '=',
+                    # Equal String Operator
+                    TokenType.OPERATOR_EQUAL_STR,
+                    "===",
+                    
+                    # Equal Operator
+                    TokenType.OPERATOR_EQUAL,
+                    '==',
+                )
             
-            # Assign Operator
-            TokenType.OPERATOR_ASSIGN,
-            '=',
-        )    
+            case _:
+                self._tokens._add(
+                    Token(
+                        TokenType.OPERATOR_ASSIGN,
+                        '=',
+                        self._generic_span(1)
+                    )
+                )
+                self._advance(1)
+    
     
     def _scan_less(self):
         match self._peek(1):
-            # TODO: COMMING SOON Left Shift Operator
+            # Left Shift Operator
             case '<':
-                pass
+                self._tokens._add(
+                    Token(
+                        TokenType.OPERATOR_SHIFT_LEFT,
+                        "<<",
+                        self._generic_span(2)
+                    )
+                )
+                self._advance(2)
             
             case _:
                 self._match_next(
@@ -241,9 +274,16 @@ class Lexer:
         
     def _scan_greater(self):
         match self._peek(1):
-            # TODO Right Shift Operator
+            # Right Shift Operator
             case '>':
-                pass
+                self._tokens._add(
+                    Token(
+                        TokenType.OPERATOR_SHIFT_RIGHT,
+                        ">>",
+                        self._generic_span(2)
+                    )
+                )
+                self._advance(2)
             
             case _:
                 self._match_next(
@@ -264,56 +304,123 @@ class Lexer:
             #case '!':
             #   pass
             
-            case _:
+            case '=':
+                self._advance(1)
                 self._match_next(
                     '=',
                     # Not Equal Than Operator
-                    TokenType.OPERATOR_NOT_EQUAL,
-                    "!=",
+                    TokenType.OPERATOR_NOT_EQUAL_STR,
+                    "!==",
                     
                     # Alt NOT Boolwise Operator
-                    TokenType.GATE_NOT,
-                    '!'
+                    TokenType.OPERATOR_NOT_EQUAL,
+                    '!='
                 )
+            
+            case _:
+                self._tokens._add(
+                    Token(
+                        TokenType.GATE_NOT,
+                        '!',
+                        self._generic_span(1)
+                    )
+                )
+                self._advance(1)
                 
                      
     def _scan_ampersand(self):
-        # EN el futuro usar self._match_next para esta cuando se agregue AND bitwise
         
         match self._peek(1):
             # Alternative AND Bool-Wise Operator
             case '&':
-                self._tokens._add(
-                    Token(
-                        TokenType.GATE_AND,
-                        "&&",
-                        self._generic_span(2)
-                    )
+                self._advance(1)
+                self._match_next(
+                    '=',
+                    TokenType.OPERATOR_AND_ASSIGN,
+                    "&&=",
+                    
+                    TokenType.GATE_AND,
+                    '&'
                 )
-                self._advance(2)
             
-            #TODO: COMMING SOON -> AND Bit-Wise Operator
+            #AND Bit-Wise Operator
             case _:
-                pass
+                self._match_next(
+                    '=',
+                    TokenType.OPERATOR_BAND_ASSIGN,
+                    '&=',
+                    
+                    TokenType.BIT_AND,
+                    '&'
+                )
     
     
     def _scan_pipe(self):
-        # HACER LOS MISMO QUE AND ARRIBA
         match self._peek(1):
             # Alternative OR Bool-Wise Operator
             case '|':
+                self._advance(1)
+                self._match_next(
+                    '=',
+                    TokenType.OPERATOR_OR_ASSIGN,
+                    "||=",
+                    
+                    TokenType.GATE_OR,
+                    '||'
+                )
+            
+            # OR Bit-Wise Operator
+            case _:
+                self._match_next(
+                    '=',
+                    TokenType.OPERATOR_BOR_ASSIGN,
+                    '|=',
+                    
+                    TokenType.BIT_OR,
+                    '|'
+                )
+    
+    def _scan_tild(self):
+        match self._peek(1):
+            case '&':
                 self._tokens._add(
                     Token(
-                        TokenType.GATE_OR,
-                        "||",
+                        TokenType.BIT_NAND,
+                        "~&",
                         self._generic_span(2)
                     )
                 )
                 self._advance(2)
             
-            # TODO: COMMING SOON -> OR Bit-Wise Operator
+            case '|':
+                self._tokens._add(
+                    Token(
+                        TokenType.BIT_NOR,
+                        "~|",
+                        self._generic_span(2)
+                    )
+                )
+                self._advance(2)
+            
+            case '^':
+                self._tokens._add(
+                    Token(
+                        TokenType.BIT_XNOR,
+                        "~^",
+                        self._generic_span(2)
+                    )
+                )
+                self._advance(2)
+            
             case _:
-                pass
+                self._tokens._add(
+                    Token(
+                        TokenType.BIT_NOT,
+                        "~",
+                        self._generic_span(1)
+                    )
+                )
+                self._advance(1)
     
     
     def _scan_other(self, char: str):
@@ -353,6 +460,7 @@ class Lexer:
         
         while not self._is_end():
             char = self._peek(0)
+            
             if char.isdigit():
                 if is_separate and digit_sequence >= 3:
                     while self._peek(0).isdigit() or self._peek(0) == '_':
@@ -497,8 +605,7 @@ class Lexer:
         val = float(numero) if is_float else int(numero)
         self._tokens._add(Token(TokenType.LITERAL_NUMBER, val, Span(start_position, self._position, self._file_map)))
 
-                
-                
+                             
     def _scan_identifier_or_keyword(self) -> None:
         start_position = self._position
         self._advance(1)
@@ -807,10 +914,19 @@ class Lexer:
                 case '|':
                     self._scan_pipe()
                 
-                # TODO: COMMING SOON -> NOT Bit-Wise Operator
                 case '~':
-                    pass
+                    self._scan_tild()
                 
+                case '^':
+                    self._match_next(
+                        '=',
+                        TokenType.OPERATOR_BXOR_ASSIGN,
+                        '^=',
+                        
+                        TokenType.BIT_XOR,
+                        '^'
+                    )
+                    
                 case _:
                     self._scan_other(char)
          
@@ -826,7 +942,3 @@ class Lexer:
         return self._tokens
 
 
-"""HAcer de ultimo:
-
-
-"""

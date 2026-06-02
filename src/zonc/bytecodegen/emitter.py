@@ -5,9 +5,7 @@ from .bytecodescope import SymbolTable, RegT, ZonVar
 from collections import namedtuple
 import struct
 
-#TODO -> recordar hacer if expr
-#TODO -> recordar hacer spilling de arguments -> saved en stack pero solo despues de resolver el problema
-# Que pasa si hay mas de 8 argumentos??(a0 - a7)
+#TODO -> despues de meter metodos recordar meter .in_heap() y .in_rodata() en str
 
 class LabelManger:
     def __init__(self):
@@ -26,7 +24,7 @@ IntsB = namedtuple("IntsB", ["rs1", "rs2", "opc", "f3", "label"])
 IntsJ = namedtuple("IntsJ", ["opc", "label", "rd"])
 InstJR = namedtuple("IntsJR", ["rd", "rs1"])
 ConstantLoad = namedtuple("ConstantLoad", ["rd", "rd_int", "pool_offset", "is_float"])
-
+AddressLoad = namedtuple("AddressLoad", ["rd", "pool_offset"])
 
 class Emitter:
     def __init__(self):
@@ -43,8 +41,10 @@ class Emitter:
         self.functions = {}
         self.actual_func = ""
         self.block_exits = []
+        self.value_block_exits = []
         self.data_section_size = 0
         self.entry_point = 0
+        self.string_pool = {}
           
     def add_to_pool(self, value_bits):
         if value_bits not in self.constant_pool:
@@ -214,7 +214,7 @@ class Emitter:
             pool_size = len(self.pool_data)
             f.write(text_size.to_bytes(4, "little")) # 4 bytes(.text size)
             f.write(data_size.to_bytes(4, "little")) # 4 bytes(.data size)
-            f.write(pool_size.to_bytes(4, "little")) #4 bytes(pool size)
+            f.write(pool_size.to_bytes(4, "little")) #4 bytes(.rodata size)
             
             #40 bytes vacios padding para futura expansion
             i = 0
@@ -268,6 +268,21 @@ class Emitter:
                 
                 elif isinstance(inst, InstJR):
                     f.write(self.generate_i_type_jalr(inst))
+                    
+                elif isinstance(inst, AddressLoad):
+                    dist_to_pool = (text_size - current_pc) + inst.pool_offset
+                    low = dist_to_pool & 0xFFF
+                    high = dist_to_pool >> 12
+                    if low & 0x800:
+                        high += 1
+                    high &= 0xFFFFF
+                    rd = inst.rd & 0x1F
+                    
+                    auipc_inst = (high << 12) | (rd << 7) | OpCode.AUIPC
+                    f.write(auipc_inst.to_bytes(4, "little"))
+                    
+                    addi_inst = (low << 20) | (rd << 15) | (F3_ALU.ADD_SUB << 12) | (rd << 7) | OpCode.OP_IMM
+                    f.write(addi_inst.to_bytes(4, "little"))
             
             f.write(self.pool_data)
 
@@ -276,9 +291,7 @@ class Emitter:
             while i < data_size_in_4_bytes:
                 f.write(0b0.to_bytes(4, "little"))
                 i += 1
-                
-            
-                    
+                         
     def float_to_bits(self, f):
         return struct.unpack('<q', struct.pack('<d', f))[0]
     
@@ -314,6 +327,23 @@ class Emitter:
         if isinstance(reg, ZonVar) and reg.reg is None:
             self._write_result(reg, target_reg)
             
+    def add_string_to_pool(self, s: str) -> int:
+        if s in self.string_pool:
+            return self.string_pool[s]
+
+        length = len(s)
+        len_bytes = bytearray()
+        for i in range(8):
+            len_bytes.append((length >> (8 * i)) & 0xFF)
+
+        data_bytes = s.encode('ascii')
+        full_bytes = len_bytes + data_bytes + b'\00'
+
+        offset = len(self.pool_data)
+        self.pool_data.extend(full_bytes)
+        self.string_pool[s] = offset
+        return offset
+    
     def emit_li(self, n, reg):
         low = n & 0xFFF
         high = n >> 12
@@ -329,6 +359,7 @@ class Emitter:
     def prologue(self, stmts, params: list = None):
         from .linear_scan_register_allocation import LinearScanRegisterAllocation
         allocator = LinearScanRegisterAllocation(num_available_regs=7, num_available_fregs=12)
+        
         
         bytes_needed, has_call, used_s = allocator.analyze_function(stmts, params)
 
@@ -350,9 +381,13 @@ class Emitter:
         
         self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 8, 2, bytes_needed)
         self.offset_stack.append([current_offset, bytes_needed, has_call, used_s])
-        
+    
+        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -100)
+        self.emit_ecall()
+             
     def epilogue(self):
         _, bytes_reserved, has_call, used_s = self.offset_stack[-1]
+        
         
         current_offset = bytes_reserved - 24
         for reg_num in used_s[0]:
@@ -370,6 +405,9 @@ class Emitter:
         self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 2, 2, bytes_reserved)
         
         self.offset_stack.pop()
+        
+        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -101)
+        self.emit_ecall()
     
     def generate_program_entry(self, program_stmts: list):
         has_main = any(isinstance(s, FuncForm) and s.name == "main" for s in program_stmts)
@@ -409,12 +447,18 @@ class Emitter:
                     self._write_result(temp_reg, temp_reg_s)
                     is_literal = True
                     
+                elif isinstance(val_node, StringLiteral):
+                    str_zv = self.generate_expr(val_node)
+                    temp_reg = self._read_operand(str_zv, self.REG_SCRATCH_X)
+                    is_literal = True
+                    self.reg_manager.free_temp(str_zv)
+                    
                 else:
                     reg_value = self.generate_expr(val_node, var_type.num)
                     temp_reg = self._read_operand(reg_value, self.REG_SCRATCH_X if reg_value.regt == RegT.X else self.REG_SCRATCH_F)
                     is_literal = False
 
-                if var_type.num in [1, 3, 6]:
+                if var_type.num in [1, 3, 4, 6]:
                     self.emit_s(OpCode.OP_S, F3_S.SD, 3, temp_reg, real_reg.offset_global)
                 elif var_type.num in [2, 7]:
                     self.emit_s(OpCode.OP_FS, F3_FS.FSD, 3, temp_reg, real_reg.offset_global)
@@ -540,24 +584,59 @@ class Emitter:
                 self.emit_jalr(0, 1)
                 self.symbol_table.exit_scope()
 
+    #Function temporal
+    def emit_ecall_store(self, node):
+        for i, param in enumerate(node.params):
+            if isinstance(param, IntLiteral):
+                self.generate_literal_num(param.value, 10+i)
+            
+            else:
+                
+                reg_param = self.generate_expr(param)
+                src_reg = self._read_operand(reg_param, self.REG_SCRATCH_X)
+                
+                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10+i, src_reg, 0)
+                self.reg_manager.free_temp(reg_param)
+                        
+        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, -103)
+        self.emit_ecall()
+        
+    def emit_ecall_alloc_load(self, node, flag):
+        if isinstance(node.params[0], IntLiteral):
+            self.generate_literal_num(node.params[0].value, 10)
+            
+        else:
+            reg_param = self.generate_expr(node.params[0])
+            src_reg = self._read_operand(reg_param, self.REG_SCRATCH_X)
+            
+            self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, src_reg, 0)
+            self.reg_manager.free_temp(reg_param)
+        
+        code = 0
+        if flag == 0: code = -102
+        elif flag == 1: code = -104
+        
+        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, code)
+        self.emit_ecall()
+        
+        return ZonVar(10, RegT.X, ZonType(1, "int64"))
+            
     def generate_stmt(self, node):
         match node:
             case DeclarationStmt():
                 if not self.symbol_table.exists_here(node.name):
-                    is_float = node.type.num in [2, 7] 
+                    is_float = node.type.num in [2, 7]
                     saved_list = self.symbol_table.fsaved if is_float else self.symbol_table.saved
                     regt = RegT.F if is_float else RegT.X
-                    
                     used_regs = {v.reg for s in self.symbol_table.scopes for v in s.values() if v.reg is not None and v.regt == regt}
-                    
                     free_reg = next((r for r in saved_list if r not in used_regs), None)
-                    
                     if free_reg is not None:
                         zonvar = ZonVar(free_reg, regt, node.type)
                     else:
+                        bytes_needed = self.offset_stack[-1][1]
                         current_offset = self.offset_stack[-1][0]
-                        zonvar = ZonVar(None, regt, node.type, offset_stack=current_offset)
-                        
+                        fp_offset = current_offset - bytes_needed 
+                        zonvar = ZonVar(None, regt, node.type, offset_stack=fp_offset)
                     self.symbol_table.scopes[-1][node.name] = zonvar
 
             case AssignmentStmt():
@@ -567,7 +646,7 @@ class Emitter:
                     reg_value = self.generate_expr(node.value, real_reg.zontype.num)
                     src_reg = self._read_operand(reg_value, self.REG_SCRATCH_X if reg_value.regt == RegT.X else self.REG_SCRATCH_F)
                     
-                    if real_reg.zontype.num in [1, 3, 6]:
+                    if real_reg.zontype.num in [1, 3, 4, 6]:
                         self.emit_s(OpCode.OP_S, F3_S.SD, 3, src_reg, real_reg.offset_global)
                         self.reg_manager.free_temp(reg_value)
                     elif real_reg.zontype.num in [2, 7]:
@@ -622,10 +701,18 @@ class Emitter:
                     temp_reg = self.REG_SCRATCH_X
                     self.generate_literal_num(val_node.value, temp_reg)
                     is_literal = True
+                    
                 elif isinstance(val_node, FloatLiteral):
                     temp_reg = self.REG_SCRATCH_F
                     self.generate_literal_f(val_node.value, temp_reg)
                     is_literal = True
+                    
+                elif isinstance(val_node, StringLiteral):
+                    str_zv = self.generate_expr(val_node)
+                    temp_reg = self._read_operand(str_zv, self.REG_SCRATCH_X)
+                    is_literal = True
+                    self.reg_manager.free_temp(str_zv)    
+                
                 else:
                     reg_value = self.generate_expr(val_node, var_num_type)
                     temp_reg = self._read_operand(reg_value, self.REG_SCRATCH_X if reg_value.regt == RegT.X else self.REG_SCRATCH_F)
@@ -644,7 +731,9 @@ class Emitter:
                     else:
                         current_offset = self.offset_stack[-1][0]
                         self.offset_stack[-1][0] -= 8 
-                        real_reg = ZonVar(None, regt, var_type, offset_stack=current_offset)
+                        bytes_needed = self.offset_stack[-1][1]
+                        fp_offset = current_offset - bytes_needed
+                        real_reg = ZonVar(None, regt, var_type, offset_stack=fp_offset)
                     
                     self.symbol_table.scopes[-1][var_name] = real_reg
 
@@ -660,43 +749,59 @@ class Emitter:
                     self.reg_manager.free_temp(reg_value)
 
             case CallFunc():
-                if node.name == "print":
-                    if isinstance(node.params[0], BoolLiteral):
-                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, 0x0, node.params[0].value)
-                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1002)
-                        self.emit_ecall()
-                    
-                    elif isinstance(node.params[0], IntLiteral):
-                        self.generate_literal_num(node.params[0].value, 10)
-                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1000)
-                        self.emit_ecall()
-                        
-                    elif isinstance(node.params[0], FloatLiteral):
-                        self.generate_literal_f(node.params[0].value, 10)
-                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1001)
-                        self.emit_ecall()
-                    
-                    else:
-                        reg_param = self.generate_expr(node.params[0])
-                        src_reg = self._read_operand(reg_param, self.REG_SCRATCH_X if reg_param.regt == RegT.X else self.REG_SCRATCH_F)
-                        
-                        if reg_param.regt == RegT.X:
-                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, src_reg, 0)
+                if node.name in ["print", "println"]:
+                    if node.params is not None:
+                        for param in node.params:
+                            if isinstance(param, BoolLiteral):
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, 0x0, param.value)
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, -3)
+                                self.emit_ecall()
                             
-                            if reg_param.zontype.num in [1, 6]:
-                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1000)
-                            elif reg_param.zontype.num == 3:
-                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1002)
-                            else:
-                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1000)
+                            elif isinstance(param, IntLiteral):
+                                self.generate_literal_num(param.value, 10)
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, -1)
+                                self.emit_ecall()
                                 
-                        elif reg_param.regt == RegT.F:
-                            self.emit_f_type(OpCode.OP_F, 10, src_reg, src_reg, 0x0, F7.FSGNJ_D)
-                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, 1001)
-                        
-                        self.reg_manager.free_temp(reg_param)
+                            elif isinstance(param, FloatLiteral):
+                                self.generate_literal_f(param.value, 10)
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0x0, -2)
+                                self.emit_ecall()
+                            
+                            elif isinstance(param, StringLiteral):
+                                str_var = self.generate_expr(param)
+                                src_reg = self._read_operand(str_var, self.REG_SCRATCH_X)
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, src_reg, 0)
+                                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -4)
+                                self.emit_ecall()
+                                self.reg_manager.free_temp(str_var)
+                            
+                            else:
+                                reg_param = self.generate_expr(param)
+                                src_reg = self._read_operand(reg_param, self.REG_SCRATCH_X if reg_param.regt == RegT.X else self.REG_SCRATCH_F)
+                                
+                                if reg_param.regt == RegT.X:
+                                    self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, src_reg, 0)
+                                    if reg_param.zontype.num == 3:
+                                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -3)
+                                    elif reg_param.zontype.num == 4:
+                                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -4)
+                                    else:
+                                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -1)
+                                        
+                                elif reg_param.regt == RegT.F:
+                                    self.emit_f_type(OpCode.OP_F, 10, src_reg, src_reg, 0x0, F7.FSGNJ_D)
+                                    self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -2)
+                                
+                                self.emit_ecall()
+                                self.reg_manager.free_temp(reg_param)
+                    
+                    if node.name == "println":
+                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -5)
                         self.emit_ecall()
-
+                    
+                elif node.name == "store":
+                    self.emit_ecall_store(node)
+                
                 else:
                     param_counter = 10
                     fparam_counter = 10
@@ -735,12 +840,16 @@ class Emitter:
                 
             case BlockExpr():
                 exit = self.label_manager.create()
-                self.block_exits.append(exit)
+                self.value_block_exits.append(exit)
                 self.symbol_table.enter_scope()
+                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -100)
+                self.emit_ecall()
                 for stmt in node.stmts:
                     self.generate_stmt(stmt)
                 self.symbol_table.exit_scope()
                 self.label_manager.place_label(exit, self.get_pc())
+                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -101)
+                self.emit_ecall()
                             
             case IfForm():
                 exit = self.label_manager.create()
@@ -807,8 +916,8 @@ class Emitter:
                     self.emit_f_type(OpCode.OP_F, 10, src_reg, src_reg, 0x00, F7.FSGNJ_D)
                     
                 self.reg_manager.free_temp(reg_res)
-                self.emit_jump(self.block_exits[-1])
-                return reg_res.regt
+                self.emit_jump(self.value_block_exits[-1])
+                return reg_res.regt, reg_res.zontype
                 
             case ReturnStmt():
                 if node.value is None:
@@ -878,12 +987,70 @@ class Emitter:
             self.generate_literal_f(node.value, reg)
             return reg
         
+        if isinstance(node, StringLiteral):
+            pool_offset = self.add_string_to_pool(node.value)
+            reg = self.reg_manager.alloc_temp()
+            self.code.append(AddressLoad(rd=reg.reg, pool_offset=pool_offset))
+            self.code.append("DUMMY")
+            return ZonVar(reg.reg, RegT.X, ZonType(4, "string"))
+        
         match node:
+            case CastExpr():
+                if node.zontype.num == 1:
+                    reg_value = self.generate_expr(node.value)
+                    src_v = self._read_operand(reg_value, self.REG_SCRATCH_X if reg_value.regt == RegT.X else self.REG_SCRATCH_F)
+                    reg = self.reg_manager.alloc_temp()
+                    rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                    self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, reg, src_v, 0)
+                    self._write_result(reg, rd)
+                    return reg
+                
+                elif node.zontype.num == 3:
+                    reg_value = self.generate_expr(node.value)
+                    src_v = self._read_operand(reg_value, self.REG_SCRATCH_X if reg_value.regt == RegT.X else self.REG_SCRATCH_F)
+                    reg = self.reg_manager.alloc_temp()
+                    rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                    self.emit_r_type(OpCode.OP, F3_ALU.SLTU_SLTIU, F7.STANDARD, reg, 0, src_v)
+                    self._write_result(reg, rd)
+                    reg.zontype = node.zontype
+                    return reg
+                    
             case BinaryExpr():
                 is_w = (target_type == 6)
                 is_s = (target_type == 2)
                 
                 match node.operator:
+                    case Operator.EQ_STR:
+                        reg = self.emit_eq_str(node)
+                        reg.zontype = ZonType(3, "bool")
+                        return reg
+                    
+                    case Operator.NE_STR:
+                        reg = self.emit_eq_str(node)
+                        reg_not = self.generate_not_expr(reg_val=reg)
+                        reg_not.zontype = ZonType(3, "bool")
+                        return reg_not
+                    
+                    case Operator.CONCAT:
+                        reg_left = self.generate_expr(node.left)
+                        reg_right = self.generate_expr(node.right)
+                        
+                        src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+                        src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
+                        
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        
+                        # Emitir STR_CONCAT rd, rs1, rs2
+                        self.emit_r_type(OpCode.OP_STR, F3_STR.CONCAT, F7_STR.STANDARD, rd, src_l, src_r)
+                        self._write_result(reg, rd)
+                        
+                        self.reg_manager.free_temp(reg_left)
+                        self.reg_manager.free_temp(reg_right)
+                        
+                        reg.zontype = ZonType(4, "string")
+                        return reg
+                  
                     case Operator.ADD:
                         if isinstance(node.right, IntLiteral) and (node.right.value >= -2048 and node.right.value <= 2047):
                             reg_left = self.generate_expr(node.left)
@@ -894,6 +1061,7 @@ class Emitter:
                             self.emit_i_type(opcode, F3_ALU.ADD_SUB, rd, src_l, node.right.value)
                             self._write_result(reg, rd)
                             self.reg_manager.free_temp(reg_left)
+                            reg.zontype = ZonType(1, "int64")
                             return reg
 
                         if isinstance(node.left, IntLiteral) and (node.left.value >= -2048 and node.left.value <= 2047):
@@ -905,6 +1073,7 @@ class Emitter:
                             self.emit_i_type(opcode, F3_ALU.ADD_SUB, rd, src_r, node.left.value)
                             self._write_result(reg, rd)
                             self.reg_manager.free_temp(reg_right)
+                            reg.zontype = ZonType(1, "int64")
                             return reg
 
                         reg_left = self.generate_expr(node.left)
@@ -912,12 +1081,13 @@ class Emitter:
                         
                         if reg_left.regt == RegT.X:
                             src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
-                            src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X) 
+                            src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
                             reg = self.reg_manager.alloc_temp()
                             rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
                             opcode = OpCode.OP_32 if is_w else OpCode.OP
                             self.emit_r_type(opcode, F3_ALU.ADD_SUB, F7.STANDARD, rd, src_l, src_r)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(1, "int64")
                             
                         elif reg_left.regt == RegT.F:
                             src_l = self._read_operand(reg_left, self.REG_SCRATCH_F)
@@ -927,9 +1097,11 @@ class Emitter:
                             f7 = F7.STANDARD if is_s else F7.M_EXT_OR_FADD_D
                             self.emit_f_type(OpCode.OP_F, rd, src_l, src_r, 0x7, f7)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(2, "double")
                         
                         self.reg_manager.free_temp(reg_left)
                         self.reg_manager.free_temp(reg_right)
+                        
                         return reg
 
                     case Operator.SUB:
@@ -942,6 +1114,7 @@ class Emitter:
                             self.emit_i_type(opcode, F3_ALU.ADD_SUB, rd, src_l, -(node.right.value))
                             self.reg_manager.free_temp(reg_left)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(1, "int64")
                             return reg
 
                         reg_left = self.generate_expr(node.left)
@@ -954,6 +1127,7 @@ class Emitter:
                             opcode = OpCode.OP_32 if is_w else OpCode.OP
                             self.emit_r_type(opcode, F3_ALU.ADD_SUB, F7.ALT, rd, src_l, src_r)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(1, "int64")
                         
                         elif reg_left.regt == RegT.F:
                             src_l = self._read_operand(reg_left, self.REG_SCRATCH_F)
@@ -963,9 +1137,12 @@ class Emitter:
                             f7 = F7.FSUB_S if is_s else F7.FSUB_D
                             self.emit_f_type(OpCode.OP_F, rd, src_l, src_r, 0x7, f7)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(2, "double")
+                            
                             
                         self.reg_manager.free_temp(reg_left)
                         self.reg_manager.free_temp(reg_right)
+                        
                         return reg
                     
                     case Operator.MUL:
@@ -979,6 +1156,7 @@ class Emitter:
                             opcode = OpCode.OP_32 if is_w else OpCode.OP
                             self.emit_r_type(opcode, F3_M_EXT.MUL, F7.M_EXT_OR_FADD_D, rd, src_l, src_r)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(1, "int64")
                             
                         elif reg_left.regt == RegT.F:
                             src_l = self._read_operand(reg_left, self.REG_SCRATCH_F)
@@ -988,10 +1166,13 @@ class Emitter:
                             f7 = F7.FMUL_S if is_s else F7.FMUL_D
                             self.emit_f_type(OpCode.OP_F, rd, src_l, src_r, 0x7, f7)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(2, "double")
+                            
 
                         
                         self.reg_manager.free_temp(reg_left)
                         self.reg_manager.free_temp(reg_right)
+                       
                         return reg
                     
                     case Operator.DIV:
@@ -1005,6 +1186,7 @@ class Emitter:
                             opcode = OpCode.OP_32 if is_w else OpCode.OP
                             self.emit_r_type(opcode, F3_M_EXT.DIV, F7.M_EXT_OR_FADD_D, rd, src_l, src_r)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(1, "int64")
                         
                         elif reg_left.regt == RegT.F:
                             src_l = self._read_operand(reg_left, self.REG_SCRATCH_F)
@@ -1014,9 +1196,11 @@ class Emitter:
                             f7 = F7.FDIV_S if is_s else F7.FDIV_D
                             self.emit_f_type(OpCode.OP_F, rd, src_l, src_r, 0x7, f7)
                             self._write_result(reg, rd)
+                            reg.zontype = ZonType(2, "double")
+                            
                             
                         self.reg_manager.free_temp(reg_left)
-                        self.reg_manager.free_temp(reg_right)        
+                        self.reg_manager.free_temp(reg_right)     
                         return reg
                     
                     case Operator.MOD:
@@ -1029,33 +1213,128 @@ class Emitter:
                         opcode = OpCode.OP_32 if is_w else OpCode.OP
                         self.emit_r_type(opcode, F3_M_EXT.REM, F7.M_EXT_OR_FADD_D, rd, src_l, src_r)
                         self._write_result(reg, rd)
+                        reg.zontype = ZonType(1, "int64")
 
                         self.reg_manager.free_temp(reg_left)
                         self.reg_manager.free_temp(reg_right)
                         return reg
                     
                     case Operator.LT: return self.generate_lt_expr(node)
+                    
                     case Operator.GT:
                         right = node.right
                         node.right = node.left
                         node.left = right
                         return self.generate_lt_expr(node)
+                    
                     case Operator.LE:
                         right = node.right
                         node.right = node.left
                         node.left = right
                         reg_lt = self.generate_lt_expr(node)
                         return self.generate_not_expr(reg_val=reg_lt)
+                    
                     case Operator.GE:
                         reg_lt = self.generate_lt_expr(node)
                         return self.generate_not_expr(reg_val=reg_lt)
+                    
                     case Operator.EQ: return self.generate_eq_expr(node)
+                    
                     case Operator.NE:
                         reg_eq = self.generate_eq_expr(node)
                         return self.generate_not_expr(reg_val=reg_eq)
-                    case Operator.AND: return self.generate_and_expr(node)
-                    case Operator.OR: return self.generate_or_expr(node)
+                    
+                    case Operator.AND: 
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        self.generate_cond_and(node, None, rd)
+                        self._write_result(reg, rd)
+                        reg.zontype = ZonType(3, "bool")
+                        return reg
+                    
+                    case Operator.OR:
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        self.generate_cond_or(node, None, rd)
+                        self._write_result(reg, rd)
+                        reg.zontype = ZonType(3, "bool")
+                        return reg
+                    
+                    case Operator.BAND:
+                        return self.generate_and_expr(node)
+                    
+                    case Operator.BXOR:
+                        reg = self.generate_xor_expr(node)
+                        return reg
+                    
+                    case Operator.BOR:
+                        return self.generate_or_expr(node)
+                    
+                    case Operator.SL:
+                        if isinstance(node.right, IntLiteral) and node.right.value >= -2048 and node.right.value <= 2047:
+                            reg_left = self.generate_expr(node.left)
+                            src_l = self._read_operand(reg_right, self.REG_SCRATCH_X)
+                            reg = self.reg_manager.alloc_temp()
+                            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.SLL_SLLI, rd, src_l, node.right.value)
+                            self._write_result(reg, rd)
+                            self.reg_manager.free_temp(reg_left)
+                            return reg
                         
+                        reg_left = self.generate_expr(node.left)
+                        reg_right = self.generate_expr(node.right)
+                        src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+                        src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        self.emit_r_type(OpCode.OP, F3_ALU.SLL_SLLI, F7.STANDARD, rd, src_l, src_r)
+                        self._write_result(reg, rd)
+                        self.reg_manager.free_temp(reg_left)
+                        self.reg_manager.free_temp(reg_right)
+                        return reg
+                    
+                    case Operator.SR:
+                        if isinstance(node.right, IntLiteral):
+                            reg_left = self.generate_expr(node.left)
+                            src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+                            reg = self.reg_manager.alloc_temp()
+                            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                            shamt = node.right.value & 0x3F 
+    
+                            imm_preparado = 0x400 | shamt  
+                            
+                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.SRL_SRLI_SRA_SRAI, rd, src_l, imm_preparado)
+                            self._write_result(reg, rd)
+                            self.reg_manager.free_temp(reg_left)
+                            return reg
+                        
+                        reg_left = self.generate_expr(node.left)
+                        reg_right = self.generate_expr(node.right)
+                        src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+                        src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        self.emit_r_type(OpCode.OP, F3_ALU.SRL_SRLI_SRA_SRAI, F7.ALT, rd, src_l, src_r)
+                        self._write_result(reg, rd)
+                        self.reg_manager.free_temp(reg_left)
+                        self.reg_manager.free_temp(reg_right)
+                        return reg
+                    
+                    case Operator.BNAND:
+                        reg = self.generate_and_expr(node)
+                        reg_not = self.generate_not_expr(reg_val=reg, bit=True)
+                        return reg_not
+                    
+                    case Operator.BNOR:
+                        reg = self.generate_or_expr(node)
+                        reg_not = self.generate_not_expr(reg_val=reg, bit=True)
+                        return reg_not
+                    
+                    case Operator.BXNOR:
+                        reg = self.generate_xor_expr(node)
+                        reg_not = self.generate_not_expr(reg_val=reg, bit=True)
+                        return reg_not
+                    
             case UnaryExpr():
                 match node.operator:
                     case Operator.NEG:
@@ -1079,11 +1358,24 @@ class Emitter:
 
                     case Operator.NOT:
                         return self.generate_not_expr(node)
+                    
+                    case Operator.BNOT:
+                        reg_value = self.generate_expr(node.value)
+                        src_v = self._read_operand(reg_value, self.REG_SCRATCH_X)
+                        
+                        reg = self.reg_manager.alloc_temp()
+                        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+                        
+                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_v, -1)
+                        self._write_result(reg, rd)
+                        
+                        self.reg_manager.free_temp(reg_value)
+                        return reg
                         
             case VariableExpr():
                 var = self.symbol_table.resolve(node.name)
                 if var.is_global:
-                    if var.zontype.num in [1, 3, 6]:
+                    if var.zontype.num in [1, 3, 4, 6]:
                         reg_temp = self.reg_manager.alloc_temp()
                         reg_temp_s = self._read_operand(reg_temp, self.REG_SCRATCH_X)
                         self.emit_i_type(OpCode.L, F3_L.LD, reg_temp_s, 3, var.offset_global)
@@ -1098,34 +1390,93 @@ class Emitter:
                 return var
             
             case BlockExpr():
-                exit = self.label_manager.create()
-                self.block_exits.append(exit)
+                exit_label = self.label_manager.create()
+                self.value_block_exits.append(exit_label)
                 self.symbol_table.enter_scope()
+                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -100)
+                self.emit_ecall()
+                
                 regt = None
                 for stmt in node.stmts:
                     if isinstance(stmt, GiveStmt):
-                        regt = self.generate_stmt(stmt)
-                        continue
-                    self.generate_stmt(stmt)
-                            
+                        regt, zontype = self.generate_stmt(stmt)
+                    else:
+                        self.generate_stmt(stmt)
+                        
                 self.symbol_table.exit_scope()
-                self.label_manager.place_label(exit, self.get_pc())
-                self.block_exits.pop()
-                return ZonVar(10, regt, ZonType(0, "UNKNOWN"))
+                self.label_manager.place_label(exit_label, self.get_pc())
+                self.value_block_exits.pop()
+                self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -101)
+                self.emit_ecall()
+                return ZonVar(10, regt, zontype)
+        
+            case IfForm():
+                exit_label = self.label_manager.create()
+                
+                result_reg = self.reg_manager.alloc_temp()
+                rd = self._resolve_dest(result_reg, self.REG_SCRATCH_X)
+                
+                if node.if_branch:
+                    false_label = self.label_manager.create()
+                    self.generate_cond(false_label, node.if_branch.cond)
+                    value = self.generate_expr(node.if_branch.block)
+                    src = self._read_operand(value, self.REG_SCRATCH_X if value.regt == RegT.X else self.REG_SCRATCH_F)
+                    if value.regt == RegT.X:
+                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, rd, src, 0)
+                    else:
+                        self.emit_f_type(OpCode.OP_F, rd, src, src, 0x00, F7.FSGNJ_D)
+                        
+                    result_reg.zontype = value.zontype
+                    self.emit_jump(exit_label)
+                    self.label_manager.place_label(false_label, self.get_pc())
+                    
+                if node.elif_branches:
+                    for i, branch in enumerate(node.elif_branches):
+                        if branch is None:
+                            continue
+                        
+                        elif_label = self.label_manager.create()
+                        self.generate_cond(elif_label, branch.cond)
+                        value = self.generate_expr(branch.block)
+                        src = self._read_operand(value, self.REG_SCRATCH_X if value.regt == RegT.X else self.REG_SCRATCH_F)
+                        if value.regt == RegT.X:
+                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, rd, src, 0)
+                        else:
+                            self.emit_f_type(OpCode.OP_F, rd, src, src, 0x00, F7.FSGNJ_D)
+                        self.emit_jump(exit_label)
+                        self.label_manager.place_label(elif_label, self.get_pc())
+                
+                value = self.generate_expr(node.else_branch.block)
+                src = self._read_operand(value, self.REG_SCRATCH_X if value.regt == RegT.X else self.REG_SCRATCH_F)
+                if value.regt == RegT.X:
+                    self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, rd, src, 0)
+                else:
+                    self.emit_f_type(OpCode.OP_F, rd, src, src, 0x00, F7.FSGNJ_D)
+                
+                self.label_manager.place_label(exit_label, self.get_pc())
+                
+                self._write_result(result_reg, rd)
+                return result_reg
             
             case CallFunc():
-                param_counter = 10
-                fparam_counter = 10
-                for param in node.params:
-                    reg = self.generate_expr(param)
-                    src_reg = self._read_operand(reg, self.REG_SCRATCH_X if reg.regt == RegT.X else self.REG_SCRATCH_F)
-                    if reg.regt == RegT.X:
-                        self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, param_counter, src_reg, 0)
-                        param_counter += 1
-                    else:
-                        self.emit_f_type(OpCode.OP_F, fparam_counter, src_reg, src_reg, 0x0, F7.FSGNJ_D)
-                        fparam_counter += 1
-                    self.reg_manager.free_temp(reg)
+                if node.name == "alloc":
+                    return self.emit_ecall_alloc_load(node, 0)
+                elif node.name == "load":
+                    return self.emit_ecall_alloc_load(node, 1)
+                
+                if node.params is not None:
+                    param_counter = 10
+                    fparam_counter = 10
+                    for param in node.params:
+                        reg = self.generate_expr(param)
+                        src_reg = self._read_operand(reg, self.REG_SCRATCH_X if reg.regt == RegT.X else self.REG_SCRATCH_F)
+                        if reg.regt == RegT.X:
+                            self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, param_counter, src_reg, 0)
+                            param_counter += 1
+                        else:
+                            self.emit_f_type(OpCode.OP_F, fparam_counter, src_reg, src_reg, 0x0, F7.FSGNJ_D)
+                            fparam_counter += 1
+                        self.reg_manager.free_temp(reg)
                     
                 current_used_temps, current_used_ftemps = self.reg_manager.get_active_regs()
                 current_offset = self.offset_stack[-1][0]
@@ -1150,11 +1501,12 @@ class Emitter:
                 
                 return_type = self.functions[node.name][1]
                 
-                if return_type.num in [1, 3, 6]:
+                if return_type.num in [1, 3, 4, 6]:
                     result = self.reg_manager.alloc_temp()
                     rd = self._resolve_dest(result, self.REG_SCRATCH_X)
                     self.emit_i_type(OpCode.OP_IMM, F3_ALU.ADD_SUB, rd, 10, 0)
                     self._write_result(result, rd)
+                    result.zontype = return_type
                     return result
                 
                 elif return_type.num in [2, 7]:
@@ -1166,7 +1518,72 @@ class Emitter:
                 
                 else:
                     return ZonVar(10, None, return_type)
-                    
+    
+    def generate_xor_expr(self, node):
+        if isinstance(node.left, IntLiteral) and node.left.value >= -2048 and node.left.value <= 2047:
+            reg_right = self.generate_expr(node.right)
+            src_r = self._read_operand(reg_right,self.REG_SCRATCH_X)
+            reg = self.reg_manager.alloc_temp()
+            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+            self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_r, node.left.value)
+            self._write_result(reg, rd)
+            self.reg_manager.free_temp(reg_right)
+            return reg
+        
+        elif isinstance(node.right, IntLiteral) and node.right.value >= -2048 and node.right.value <= 2047:
+            reg_left = self.generate_expr(node.left)
+            src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+            reg = self.reg_manager.alloc_temp()
+            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+            self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_l, node.right.value)
+            self._write_result(reg, rd)
+            self.reg_manager.free_temp(reg_left)
+            return reg
+            
+        reg_left = self.generate_expr(node.left)
+        reg_right = self.generate_expr(node.right)
+        src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+        src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
+        reg = self.reg_manager.alloc_temp()
+        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+        self.emit_r_type(OpCode.OP, F3_ALU.XOR_XORI, F7.STANDARD, rd, src_l, src_r)
+        self._write_result(reg, rd)
+        self.reg_manager.free_temp(reg_left)
+        self.reg_manager.free_temp(reg_right)
+        return reg
+    
+    def generate_not_expr(self, node=None, reg_val=None, bit: bool = False):
+        if not reg_val is None:
+            src_v = self._read_operand(reg_val, self.REG_SCRATCH_X)
+            reg = self.reg_manager.alloc_temp()
+            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+            self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_v, -1 if bit else 1)
+            self.reg_manager.free_temp(reg_val)
+            self._write_result(reg, rd)
+            
+            return reg
+            
+        reg_value = self.generate_expr(node.value)
+        src_v = self._read_operand(reg_value, self.REG_SCRATCH_X)
+        reg = self.reg_manager.alloc_temp()
+        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+        self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_v, -1 if bit else 1)
+        self.reg_manager.free_temp(reg_value)
+        self._write_result(reg, rd)
+        
+        return reg
+    
+    def emit_eq_str(self, node):
+        reg_left = self.generate_expr(node.left)
+        reg_right = self.generate_expr(node.right)
+        src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
+        src_r = self._read_operand(reg_right, 30 if src_l == self.REG_SCRATCH_X else self.REG_SCRATCH_X)
+        reg = self.reg_manager.alloc_temp()
+        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
+        self.emit_r_type(OpCode.OP_STR, F3_STR.CMP, F7_STR.STANDARD, rd, src_l, src_r)
+        self._write_result(reg, rd)
+        return reg
+    
     def generate_eq_expr(self, node):
         if isinstance(node.left, (IntLiteral, BoolLiteral)):
             reg_right = self.generate_expr(node.right)
@@ -1228,28 +1645,7 @@ class Emitter:
             self.reg_manager.free_temp(reg_right)
             self._write_result(reg, rd)
             return reg
-    
-    def generate_not_expr(self, node = None, reg_val = None):
-        if not reg_val is None:
-            src_v = self._read_operand(reg_val, self.REG_SCRATCH_X)
-            reg = self.reg_manager.alloc_temp()
-            rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
-            self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_v, 1)
-            self.reg_manager.free_temp(reg_val)
-            self._write_result(reg, rd)
-            
-            return reg
-            
-        reg_value = self.generate_expr(node.value)
-        src_v = self._read_operand(reg_value, self.REG_SCRATCH_X)
-        reg = self.reg_manager.alloc_temp()
-        rd = self._resolve_dest(reg, self.REG_SCRATCH_X)
-        self.emit_i_type(OpCode.OP_IMM, F3_ALU.XOR_XORI, rd, src_v, 1)
-        self.reg_manager.free_temp(reg_value)
-        self._write_result(reg, rd)
-        
-        return reg
-    
+     
     def generate_lt_expr(self, node):
         if isinstance(node.right, IntLiteral):
             reg_left = self.generate_expr(node.left)
@@ -1415,10 +1811,10 @@ class Emitter:
             
         self.reg_manager.free_temp(reg_left)
         self.reg_manager.free_temp(reg_right)
-        
+    
     def generate_and_expr(self, node):
-        if isinstance(node.left, (VariableExpr, BoolLiteral)) or isinstance(node.right, (VariableExpr, BoolLiteral)):
-            if isinstance(node.left, BoolLiteral):
+        if isinstance(node.left, (VariableExpr, IntLiteral)) or isinstance(node.right, (VariableExpr, IntLiteral)):
+            if isinstance(node.left, IntLiteral) and node.left.value >= -2048 and node.left.value <= 2047:
                 reg_right = self.generate_expr(node.right)
                 src_r = self._read_operand(reg_right, self.REG_SCRATCH_X)
                 reg = self.reg_manager.alloc_temp()
@@ -1429,7 +1825,7 @@ class Emitter:
 
                 return reg
             
-            if isinstance(node.right, BoolLiteral):
+            if isinstance(node.right, IntLiteral) and node.right.value >= -2048 and node.right.value <= 2047:
                 reg_left = self.generate_expr(node.left)
                 src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
                 reg = self.reg_manager.alloc_temp()
@@ -1458,8 +1854,8 @@ class Emitter:
         return reg
     
     def generate_or_expr(self, node):
-        if isinstance(node.left, (VariableExpr, BoolLiteral)) or isinstance(node.right, (VariableExpr, BoolLiteral)):
-            if isinstance(node.left, BoolLiteral):
+        if isinstance(node.left, (VariableExpr, IntLiteral)) or isinstance(node.right, (VariableExpr, IntLiteral)):
+            if isinstance(node.left, IntLiteral) and node.left.value >= -2048 and node.left.value <= 2047:
                 reg_right = self.generate_expr(node.right)
                 src_r = self._read_operand(reg_right, self.REG_SCRATCH_X)
                 reg = self.reg_manager.alloc_temp()
@@ -1470,7 +1866,7 @@ class Emitter:
 
                 return reg
             
-            if isinstance(node.right, BoolLiteral):
+            if isinstance(node.right, IntLiteral) and node.right.value >= -2048 and node.right.value <= 2047:
                 reg_left = self.generate_expr(node.left)
                 src_l = self._read_operand(reg_left, self.REG_SCRATCH_X)
                 reg = self.reg_manager.alloc_temp()
