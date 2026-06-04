@@ -312,12 +312,10 @@ def cmd_zon_compile(rute_script: str = " ", code_source: str = None, direct_zbc:
     
             
     em = Emitter()
-    em.generate_program_entry(root_node.stmts)
-    
     if direct_zbc is None:
-        em.save(path_name.with_suffix(".zbc"))
+        em.save(root_node.stmts, path_name.with_suffix(".zbc"))
     else:
-        em.save(direct_zbc)
+        em.save(root_node.stmts, direct_zbc)
    
 def cmd_zon_version():
     print("[zon info]: Zonetic Programming Language")

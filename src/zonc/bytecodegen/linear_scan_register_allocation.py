@@ -14,6 +14,7 @@ class LinearScanRegisterAllocation:
         self.seen_ints = set()
         self.seen_floats = set()
         self.has_call = False
+        self.used_heap = False
         
         self.extra = 0
         
@@ -59,8 +60,8 @@ class LinearScanRegisterAllocation:
         used_save_f = len(self.seen_floats)
         if used_save_f > len(self.saved_f): used_save_f = len(self.saved_f)
         used_save_f = self.saved_f[:used_save_f]
-
-        return bytes_needed, self.has_call, (used_save_x, used_save_f)
+        
+        return bytes_needed, self.has_call, (used_save_x, used_save_f), self.used_heap
 
     def _alloc_t(self):
         self.current_regs += 1
@@ -139,6 +140,8 @@ class LinearScanRegisterAllocation:
                     self._free_t()
                     self._free_t()
                     self._alloc_t()
+                    
+                    if node.operator == Operator.CONCAT: self.used_heap = True
                     return
                 
                 if node.operator in [Operator.ADD, Operator.SUB]:
@@ -182,11 +185,14 @@ class LinearScanRegisterAllocation:
                     self._alloc_t()
 
             case CallFunc():
-                if node.name in ["print"]:
-                    if isinstance(node.params[0], CallFunc): self.has_call = True
-                    return
+                if node.name not in ["print", "println", "alloc", "store", "load"]:
+                    self.has_call = True
+                    self.extra += self.current_regs * 8 + self.current_fregs * 8
+                    
+                if node.name in ["alloc", "store", "load"]:
+                    self.used_heap = True
                 
-                self.has_call = True
+                
                 if node.params is not None:
                     for param in node.params:
                         self._scan_node(param)
@@ -199,9 +205,8 @@ class LinearScanRegisterAllocation:
     
                 self._alloc_t()
                 self._alloc_ft()
-                self.extra += self.current_regs * 8 + self.current_fregs * 8 
                 
-
+                
             case IfForm():
                 if node.if_branch:
                     self._scan_node(node.if_branch.cond)

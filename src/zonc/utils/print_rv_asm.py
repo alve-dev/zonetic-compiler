@@ -149,13 +149,30 @@ def decode_instruction(binary: int, pc: int) -> str:
         alu_ops = ["add", "sll", "slt", "sltu", "xor", "srl/sra", "or", "and"]
         op_name = alu_ops[funct3]
         
+        alt = 0b0100000
+        
         if funct3 == 0b001 or funct3 == 0b101:
-            if funct7 == 0b0100000:
+            if funct7 == alt:
                 op_name = "sra"
             else:
                 op_name = "srl"
-        elif funct7 == 0b0100000:
+                
+        elif funct3 == 0b100:
+            if funct7 == alt:
+                op_name = "xnor"
+                
+        elif funct3 == 0b110:
+            if funct7 == alt:
+                op_name = "nor"
+                
+        elif funct3 == 0b111:
+            if funct7 == alt:
+                op_name = "nand"
+                
+        elif funct7 == alt:
             op_name = "sub"
+            
+        
         
         suffix = "w" if opcode == 0b0111011 else ""
         return f"{op_name}{suffix} {reg_name(rd)}, {reg_name(rs1)}, {reg_name(rs2)}"

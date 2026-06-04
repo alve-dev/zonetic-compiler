@@ -3,6 +3,30 @@
 All notable changes to Zonetic are documented here.
 Versions are listed from newest to oldest.
 
+## v2.6.0 — *The ByteCode Refactor Update*
+
+> This version introduces a major architectural overhaul of the compiler's backend bytecode generation subsystem, transitioning from a monolithic emitter into a highly modular, scalable file-based infrastructure. Additionally, memory management undergoes high-performance optimizations by transitioning the Scope-Based Arena Heap into a Function-Based lifecycle with lazy initialization. Finally, the custom ISA has been expanded with three non-standard, single-cycle R-Type hardware instructions (`nand`, `nor`, `xnor`) to achieve maximum execution density in bitwise operations.
+
+**Backend Architecture & Emitter Modularization**
+
+* **De-monolithization of `TheEmitter`** — Refactored the core bytecode generation system, expanding the emitter codebase to nearly 2,000 lines of highly optimized C++. The monolithic structure was entirely dismantled and distributed across dedicated, domain-specific translation files, ensuring clean separation of concerns and enabling trivial expansion for future hardware extensions.
+* **Streamlined Pipeline Scalability** — The structural splitting of the backend isolates expression parsing, statement emission, and register mapping, reducing compiler technical debt and improving compilation throughput in the pre-linking phases.
+
+**Optimized Function-Based Arena Heap**
+
+* **Lazy Allocation Subsystem** — Upgraded the dynamic memory boundary triggers within the Virtual Machine. The compiler now statically analyzes scope blocks and emits `heap_push` and `heap_pop` environment calls **only** if dynamic memory allocation (such as dynamic strings) is actively requested, eliminating structural overhead in pure compute blocks.
+* **Function-Based Arena Lifecycles** — Re-engineered the topology of the Arena Heap. The architecture departs from the extreme block-scope model (where every localized `if` or `while` block spawned an isolated arena) and unifies the allocation boundary at the function level. Each execution frame now controls its own persistent Arena Heap, drastically lowering the frequency of runtime context switching and memory re-mapping.
+
+**Custom ISA Bitwise R-Type Extensions**
+
+* **Single-Cycle Native Universal Gates** — Expanded the custom non-standard RISC-V ISA with three native hardware-level primitives to offload universal gate logic from double-instruction software emulation patterns. The universal logic operations `bnand` (`~&`), `bnor` (`~|`), and `bxnor` (`~^`) now execute in **exactly 1 hardware instruction cycle**:
+  * `nand` (*R-Type, Opcode: 0x33, F3: 0x07, F7: 0x20*) — Native bitwise AND inversion.
+  * `nor` (*R-Type, Opcode: 0x33, F3: 0x06, F7: 0x20*) — Native bitwise OR inversion.
+  * `xnor` (*R-Type, Opcode: 0x33, F3: 0x04, F7: 0x20*) — Native bitwise XOR inversion.
+* **Hardware-Level Bit Recycling (`f7` Alt-Masking)** — Implemented the new gates by mirroring the exact base Opcode and Function-3 (`f3`) configurations of standard RISC-V `and`, `or`, and `xor` primitives. To differentiate the inversion layer directly in hardware decoding, the compiler flags the alternate-operation mask inside the Function-7 (`f7`) field, shifting it from `0x00` to `0x20` (`alt` bit active), allowing the VM decoder to execute them via instant computed branch paths.
+
+---
+
 ## v2.5.0 — *The Heap Update*
 
 > This version introduces the initial dynamic memory management subsystem through a deterministic Scope-Based Arena Heap, full support for extended ASCII immutable and dynamic strings, and advanced expression parsing. Zonetic now features native expression-level `if` evaluations, strict hardware-level explicit casting, unique bitwise-logical naming semantics, a unified 16MB monolithic runtime memory map, and high-performance custom ISA string extensions.
