@@ -4,8 +4,6 @@
 # 
 # Installs the Zonetic compiler and VM, checks dependencies,
 # clones repositories, and updates the system PATH.
-# This version uses git init + pull instead of clone for
-# maximum compatibility.
 #
 # Usage: .\install_windows_complete.ps1
 # Usage with irm: irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows_complete.ps1 | iex
@@ -18,12 +16,12 @@ $GREEN  = "$([char]0x1B)[32m"
 $RED    = "$([char]0x1B)[31m"
 $YELLOW = "$([char]0x1B)[33m"
 $CYAN   = "$([char]0x1B)[36m"
-$RESET  = "$([char])0x1B)[0m]"
+$RESET  = "$([char]0x1B)[0m"
 
 # ------------------------------
 # Fun little faces for visual feedback
 # ------------------------------
-$FRAMES = @("[ o_o]", "[ o_-]", "[ -_-]", "[ -_o]")
+$FRAMES = @("[ o_o]", "[ -_o]", "[ -_-]", "[ o_-]")
 
 $FACE_SUCCESS = "${GREEN}[ ^_^]${RESET}"
 $FACE_DONE    = "${CYAN}[ ⌐■_■]b${RESET}"
@@ -208,10 +206,10 @@ function Check-And-Install-Dependency {
 }
 
 # ------------------------------
-# Clone or update repositories (Complete version uses init + pull)
+# Clone or update repositories
 # ------------------------------
 
-function Init-And-Pull-Repo {
+function Clone-Or-Pull-Repo {
     param(
         [string]$RepoUrl,
         [string]$TargetDir
@@ -220,23 +218,23 @@ function Init-And-Pull-Repo {
     if (Test-Path $TargetDir) {
         Write-Static "Repository already exists at: $TargetDir"
         Write-Animated "Updating repository..." {
-            Set-Location $TargetDir
-            git pull origin main
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to pull in $TargetDir."
+            $currentLocation = Get-Location
+            try {
+                Set-Location $TargetDir
+                git pull origin main
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to pull in $TargetDir."
+                }
+            } finally {
+                Set-Location $currentLocation
             }
-            Set-Location $HOME
         }
     } else {
-        Write-Animated "Initializing and pulling repository: $RepoUrl" {
-            Set-Location $TargetDir
-            git init
-            try { git remote add origin $RepoUrl 2>$null } catch {}
-            git pull origin main
+        Write-Animated "Cloning repository: $RepoUrl" {
+            git clone $RepoUrl $TargetDir
             if ($LASTEXITCODE -ne 0) {
-                throw "Failed to pull from $RepoUrl."
+                throw "Failed to clone $RepoUrl."
             }
-            Set-Location $HOME
         }
     }
 }
@@ -247,10 +245,10 @@ function Init-And-Pull-Repo {
 
 function Main {
     Write-Separator
-    Write-Host "${CYAN}Zonetic Installer v2.0 (Complete)${RESET}" -ForegroundColor Cyan
+    Write-Host "${CYAN}✨ Zonetic Installer v2.0${RESET}" -ForegroundColor Cyan
     Write-Separator
     
-    Write-Static "Checking dependencies..."
+    Write-Static "🔍 Checking dependencies..."
     Check-And-Install-Dependency "git" "Git.Git"
     Check-And-Install-Dependency "python" "Python.Python.3.12"
     Check-And-Install-Dependency "g++" "MSYS2.MSYS2"
@@ -282,13 +280,13 @@ function Main {
     New-Item -ItemType Directory -Path $ZoncDir -Force | Out-Null
     New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
     
-    Write-Static "Downloading Zonetic Compiler (Complete)..."
-    Init-And-Pull-Repo "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
+    Write-Static "Downloading Zonetic Compiler..."
+    Clone-Or-Pull-Repo "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
     
-    Write-Static "Downloading Zonetic VM (Complete)..."
-    Init-And-Pull-Repo "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
+    Write-Static "Downloading Zonetic VM..."
+    Clone-Or-Pull-Repo "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
     
-    Write-Static "Updating user PATH..."
+    Write-Static "🔧 Updating user PATH..."
     $LauncherPath = Join-Path $ZoncDir "scripts"
     Add-To-UserPath -PathToAdd $LauncherPath
     
