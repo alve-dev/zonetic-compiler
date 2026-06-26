@@ -1,10 +1,11 @@
 # ============================================================
-# Zonetic Installer v2.0 — Windows Setup
+# Zonetic Installer v2.0 — Windows Setup (Core Only)
 # ============================================================
 # 
-# Installs the Zonetic compiler and VM, checks dependencies,
-# clones repositories, and updates the system PATH.
-#
+# Installs:
+#   - Zonc (compiler) with sparse checkout (only src/zonc/*, scripts/*, .gitignore)
+#   - Zonvm (VM) full clone from its own repository
+# 
 # Usage: .\install_windows_complete.ps1
 # Usage with irm: irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows.ps1 | iex
 # ============================================================
@@ -206,35 +207,103 @@ function Check-And-Install-Dependency {
 }
 
 # ------------------------------
-# Clone or update repositories
+# Clone Zonc (compiler) with sparse checkout
 # ------------------------------
 
-function Clone-Or-Pull-Repo {
+function Clone-Zonc-Sparse {
     param(
         [string]$RepoUrl,
         [string]$TargetDir
     )
     
     if (Test-Path $TargetDir) {
-        Write-Static "Repository already exists at: $TargetDir"
-        Write-Animated "Updating repository..." {
+        Write-Static "Compiler repository already exists at: $TargetDir"
+        Write-Animated "Updating compiler (sparse checkout)..." {
             $currentLocation = Get-Location
             try {
                 Set-Location $TargetDir
-                git pull origin main
+                git fetch origin main
+                git checkout main 2>$null
                 if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to pull in $TargetDir."
+                    git pull origin main
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Failed to update compiler in $TargetDir."
+                    }
                 }
             } finally {
                 Set-Location $currentLocation
             }
         }
     } else {
-        Write-Animated "Cloning repository: $RepoUrl" {
+        Write-Animated "Cloning compiler (sparse checkout)..." {
+            git clone --filter=blob:none --no-checkout $RepoUrl $TargetDir
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to clone compiler repository."
+            }
+            
+            $currentLocation = Get-Location
+            try {
+                Set-Location $TargetDir
+                
+                git config core.sparseCheckout true
+                
+                if (!(Test-Path ".git/info")) {
+                    New-Item -ItemType Directory -Path ".git/info" -Force | Out-Null
+                }
+                
+                @(
+                    "src/zonc/*",
+                    "scripts/*",
+                    ".gitignore"
+                ) | Out-File -FilePath ".git/info/sparse-checkout" -Encoding utf8
+                
+                git checkout main 2>$null
+                if ($LASTEXITCODE -ne 0) {
+                    git checkout master 2>$null
+                    if ($LASTEXITCODE -ne 0) {
+                        git pull origin main
+                    }
+                }
+                
+                Write-Success "Compiler downloaded successfully."
+            } finally {
+                Set-Location $currentLocation
+            }
+        }
+    }
+}
+
+# ------------------------------
+# Clone Zonvm (VM) full repository
+# ------------------------------
+
+function Clone-Zonvm-Full {
+    param(
+        [string]$RepoUrl,
+        [string]$TargetDir
+    )
+    
+    if (Test-Path $TargetDir) {
+        Write-Static "VM repository already exists at: $TargetDir"
+        Write-Animated "Updating VM..." {
+            $currentLocation = Get-Location
+            try {
+                Set-Location $TargetDir
+                git pull origin main
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to update VM in $TargetDir."
+                }
+            } finally {
+                Set-Location $currentLocation
+            }
+        }
+    } else {
+        Write-Animated "Cloning VM..." {
             git clone $RepoUrl $TargetDir
             if ($LASTEXITCODE -ne 0) {
-                throw "Failed to clone $RepoUrl."
+                throw "Failed to clone VM repository."
             }
+            Write-Success "VM downloaded successfully."
         }
     }
 }
@@ -245,10 +314,11 @@ function Clone-Or-Pull-Repo {
 
 function Main {
     Write-Separator
-    Write-Host "${CYAN}✨ Zonetic Installer v2.0${RESET}" -ForegroundColor Cyan
+    Write-Host "${CYAN}Zonetic Installer v2.0${RESET}" -ForegroundColor Cyan
+    Write-Host "${CYAN}(Full — Compiler + VM)${RESET}" -ForegroundColor Cyan
     Write-Separator
     
-    Write-Static "🔍 Checking dependencies..."
+    Write-Static "Checking dependencies..."
     Check-And-Install-Dependency "git" "Git.Git"
     Check-And-Install-Dependency "python" "Python.Python.3.12"
     Check-And-Install-Dependency "g++" "MSYS2.MSYS2"
@@ -281,17 +351,17 @@ function Main {
     New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
     
     Write-Static "Downloading Zonetic Compiler..."
-    Clone-Or-Pull-Repo "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
+    Clone-Zonc-Sparse "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
     
     Write-Static "Downloading Zonetic VM..."
-    Clone-Or-Pull-Repo "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
+    Clone-Zonvm-Full "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
     
-    Write-Static "🔧 Updating user PATH..."
+    Write-Static "Updating user PATH..."
     $LauncherPath = Join-Path $ZoncDir "scripts"
     Add-To-UserPath -PathToAdd $LauncherPath
-    
+
     Write-Separator
-    Write-Done "Zonetic v2.0.0 installed successfully!"
+    Write-Done "Zonetic v2 installed successfully!"
     Write-Done "To test the installation, open a new terminal and run:"
     Write-Done "    zon repl"
     Write-Done "If it doesn't work, close and reopen your terminal to apply PATH changes."
