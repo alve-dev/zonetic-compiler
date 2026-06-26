@@ -23,7 +23,7 @@ $RESET  = "$([char])0x1B)[0m]"
 # ------------------------------
 # Fun little faces for visual feedback
 # ------------------------------
-$FRAMES = @("[ o_o]", "[ o_~]", "[ -_-]", "[ o_o]")
+$FRAMES = @("[ o_o]", "[ o_-]", "[ -_-]", "[ -_o]")
 
 $FACE_SUCCESS = "${GREEN}[ ^_^]${RESET}"
 $FACE_DONE    = "${CYAN}[ ⌐■_■]b${RESET}"
