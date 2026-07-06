@@ -7,13 +7,13 @@ Follow these steps to configure the Zonetic command-line interface. This process
 Zonetic features an automated installer that handles dependencies and configures the system for you. Run the following command:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install.sh | bash
 ```
 
 > [!TIP]
 > **Full Installation**: If you want to download the entire repository (including logos and examples), use this command instead:
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-lang-tree-walker-version/refs/heads/main/install_comple.sh | bash
+> curl -sSL https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_comple.sh | bash
 > ```
 
 ## 2. Verify Installation
