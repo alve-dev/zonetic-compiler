@@ -1,3 +1,3 @@
-from .the_normalizer import TheNormalizer
+from .the_normalizer import Normalizer
 
-__all__ = ["TheNormalizer"]
+__all__ = ["Normalizer"]

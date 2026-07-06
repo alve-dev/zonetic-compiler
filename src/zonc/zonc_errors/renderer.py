@@ -1,191 +1,179 @@
 from .severity import Severity
-from zonc.location_file import FileMap
-from zonc.location_file import Span
+from zonc.location_file import FileMap, Span
 from .diagnostic import Diagnostic
 
+
 class DiagnosticRenderer:
-    def __init__(self, code: str, file_map: FileMap):
-        self.code = code
-        self.file_map = file_map
-    
-    
-    def get_lines(self, line_start: int, line_end: int) -> list[str]:
-        return self.code[self.file_map.line_starts[line_start-1] : self.file_map.line_starts[line_end]].split('\n')
-    
-    
-    def note_clean(self, text: str, num_line: int) -> str:
+    """Renders a Diagnostic into a human-readable string.
+
+    Output format mirrors rustc-style diagnostics:
+        error[E0001]: message
+        --> filename:line:col
+        3 | inmut x = @
+          |         ^-- this character is not recognized
+          |
+          = note: ...
+          [ zonny face ]
+    """
+
+    def __init__(self, source: str, file_map: FileMap) -> None:
+        self._source = source
+        self._file_map = file_map
+
+    # ------------------------------------------------------------------
+    # Source line helpers
+    # ------------------------------------------------------------------
+
+    def _get_lines(self, line_start: int, line_end: int) -> list[str]:
+        start = self._file_map._line_starts[line_start - 1]
+        end   = self._file_map._line_starts[line_end]
+        return self._source[start:end].split('\n')
+
+    # ------------------------------------------------------------------
+    # Note formatting
+    # ------------------------------------------------------------------
+
+    def _format_note(self, text: str, line_num_width: int) -> str:
+        """Strip common leading indent from a multi-line note string."""
         if not text or not text.strip():
             return ""
-        
+
         lines = text.splitlines()
-        while lines and not lines[0].strip(): lines.pop(0)
-        while lines and not lines[-1].strip(): lines.pop(-1)
-        
-        if not lines: return ""
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
 
-        indent_base = len(lines[0]) - len(lines[0].lstrip())
+        if not lines:
+            return ""
 
-        cleaned_lines = []
+        indent = len(lines[0]) - len(lines[0].lstrip())
+        result = []
+
         for i, line in enumerate(lines):
-            content = line[indent_base:] if len(line) >= indent_base else line.lstrip()
-            
+            content = line[indent:] if len(line) >= indent else line.lstrip()
             if i == 0:
-                cleaned_lines.append(content.rstrip())
+                result.append(content.rstrip())
             else:
-                cleaned_lines.append((" " * (9 + num_line)) + content.lstrip())
-                
-        return "\n".join(cleaned_lines)
+                result.append((" " * (9 + line_num_width)) + content.lstrip())
 
-    
-    def firm_call_clean(self, firm: str):
-        new_firm = []
-        for char in firm:
-            if not char.isspace():
-                new_firm.append(char)
-        return "".join(new_firm)
-    
-    
-    def format_traceback(self, stack: list, msg_rendered: list[str]):
-        msg_rendered.append("Call Path:\n")
-        msg_rendered.append(f" {self.firm_call_clean(stack[0].firm)}\n └─>")
-        msg_rendered.append(f" {self.firm_call_clean(stack[1].firm)}\n     └─>")
-        msg_rendered.append(f" {self.firm_call_clean(stack[2].firm)}\n         └─>")
-        msg_rendered.append(f" {self.firm_call_clean(stack[3].firm)}\n             └─>")
-        msg_rendered.append(f" {self.firm_call_clean(stack[4].firm)}\n                 └─>")
-        msg_rendered.append(f" [ ... {stack[-1].depth - 4} identical calls hidden ... ]\n                     └─>")
-        msg_rendered.append(f" {self.firm_call_clean(stack[-1].firm)}  ← crash happened here")
-        
-    def format_span_message(
+        return "\n".join(result)
+
+    # ------------------------------------------------------------------
+    # Span rendering
+    # ------------------------------------------------------------------
+
+    def _render_spans(
         self,
         span_codes: list[Span],
-        msg_rendered: list[str],
-        span_error: list[tuple[Span, str]],
-        args: dict[str, str]
-        
-    ) -> str:
-        num_lines = []
-        for i in range(len(span_codes)):
-            num_lines.append(span_codes[i].line_end)
-        
-        num_lines.sort()
-        size_line = len(str(num_lines[-1]))
-        
-        for i in range(len(span_codes)):
-            # Lineas de todo el codigo de inicio a final
-            lines = self.get_lines(span_codes[i].line_start, span_codes[i].line_end)
-            
-            if len(self.file_map.line_starts) != span_codes[i].line_end + 1:
+        out: list[str],
+        span_labels: list[tuple[Span, str]],
+        args: dict[str, str],
+    ) -> int:
+        """Render each primary span with its source lines and label.
+        Returns the line-number column width used, for alignment below.
+        """
+        max_line = max(s.line_end for s in span_codes)
+        num_width = len(str(max_line))
+        gap = ' ' * num_width
+
+        for i, span in enumerate(span_codes):
+            lines = self._get_lines(span.line_start, span.line_end)
+
+            # the split always produces a trailing empty entry for the next line
+            if len(self._file_map._line_starts) != span.line_end + 1:
                 lines.pop()
-            
-            space_line = ' ' * size_line
-            
-            # Las tres formas de mostrar errores de zonetic
-            if len(lines) == 1:
-                msg_rendered.append(f"{span_codes[i].line_start} {' ' * (size_line - (len(str(span_codes[i].line_start))))}| {lines[0]}\n")
-                paddings = " " * (span_error[i][0].column_start)
-                pointers = "^" * (span_error[i][0].column_end - span_error[i][0].column_start)
-                msg_rendered.append(f"{space_line} |{paddings}{pointers}")
-                
-                if not(span_error[i][1] is None):
-                    msg_rendered.append(f"-- {span_error[i][1].format_map(args)}")
-                
-            elif len(lines) <= 6:
-                count = 0
-                for line in lines:
-                    msg_rendered.append(f"{span_codes[i].line_start+count} {' ' * (size_line - (len(str(span_codes[i].line_start+count))))}| {line}\n")
-                    count += 1
-                    
-                paddings = " " * (span_error[i][0].column_start)
-                pointers = "^" * (span_error[i][0].column_end - span_error[i][0].column_start)
-                msg_rendered.append(f"{space_line} |{paddings}{pointers}")
-                
-                if not(span_error[i][1] is None):
-                    msg_rendered.append(f"-- {span_error[i][1].format_map(args)}")
-            
-            else:
-                count = 0
-                for line in lines:
-                    msg_rendered.append(f"{span_codes[i].line_start+count} {' ' * (size_line - len(str(span_codes[i].line_start+count)))}| {line}\n")
-                    
-                    if count == 2:
-                        break
-                        
-                    count += 1
-                
-                msg_rendered.append(f"{space_line} |\n{space_line} ...|\n{space_line} |\n")
-                msg_rendered.append(f"{span_codes[i].line_end} | {lines[span_codes[i].line_end-span_codes[i].line_start]}\n")
-                paddings = " " * (span_error[i][0].column_start)
-                pointers = "^" * (span_error[i][0].column_end - span_error[i][0].column_start)
-                msg_rendered.append(f"{space_line} |{paddings}{pointers}")
-                
-                if not(span_error[i][1] is None):
-                    msg_rendered.append(f"-- {span_error[i][1].format_map(args)}")
-            
-            if i != len(span_codes)-1:
-                msg_rendered.append(f"\n{space_line} |\n{space_line} ...|\n{space_line} |\n")
 
-        return size_line
-        
-        
-    def format_note_and_zonny(self, msg_rendered: list[str], space_line: str, err_def, args: dict[str, str]):
-        msg_rendered.append(f"\n{space_line * ' '} |\n")
-        if args is None:
-            msg_rendered.append(f"{space_line * ' '} = note: {self.note_clean(err_def.note, space_line)}\n\n")
-            msg_rendered.append(f"{err_def.zonny}")
+            self._render_source_lines(span, lines, num_width, out)
+
+            # pointer row
+            label_span, label_text = span_labels[i]
+            padding  = " " * label_span.column_start
+            pointers = "^" * (label_span.column_end - label_span.column_start)
+            out.append(f"{gap} |{padding}{pointers}")
+
+            if label_text is not None:
+                out.append(f"-- {label_text.format_map(args)}")
+
+            # separator between multiple spans
+            if i != len(span_codes) - 1:
+                out.append(f"\n{gap} |\n{gap} ...|\n{gap} |\n")
+
+        return num_width
+
+    def _render_source_lines(
+        self,
+        span: Span,
+        lines: list[str],
+        num_width: int,
+        out: list[str],
+    ) -> None:
+        """Append source lines to out, with truncation for long spans."""
+
+        def line_prefix(offset: int) -> str:
+            n = span.line_start + offset
+            return f"{n} {' ' * (num_width - len(str(n)))}| "
+
+        gap = ' ' * num_width
+
+        if len(lines) == 1:
+            out.append(f"{line_prefix(0)}{lines[0]}\n")
+
+        elif len(lines) <= 6:
+            for offset, line in enumerate(lines):
+                out.append(f"{line_prefix(offset)}{line}\n")
+
         else:
-            msg_rendered.append(f"{space_line * ' '} = note: {self.note_clean(err_def.note.format_map(args), space_line)}\n\n")
-            msg_rendered.append(f"{err_def.zonny.format_map(args)}")
-       
-    
-    def render(self, diag: Diagnostic, is_repeated: bool) -> str:
+            # show first 3 lines, elide the middle, show the last line
+            for offset in range(3):
+                out.append(f"{line_prefix(offset)}{lines[offset]}\n")
+            out.append(f"{gap} |\n{gap} ...|\n{gap} |\n")
+            last = span.line_end - span.line_start
+            out.append(f"{span.line_end} | {lines[last]}\n")
+
+    # ------------------------------------------------------------------
+    # Note and Zonny footer
+    # ------------------------------------------------------------------
+
+    def _render_footer(
+        self,
+        out: list[str],
+        num_width: int,
+        err_def,
+        args: dict[str, str] | None,
+    ) -> None:
+        gap = ' ' * num_width
+        out.append(f"\n{gap} |\n")
+
+        note_text = err_def.note if args is None else err_def.note.format_map(args)
+        zonny     = err_def.zonny if args is None else err_def.zonny.format_map(args)
+
+        out.append(f"{gap} = note: {self._format_note(note_text, num_width)}\n\n")
+        out.append(zonny)
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def render(self, diag: Diagnostic, is_repeat: bool) -> str:
+        """Return the full diagnostic string ready to print."""
         err_def = diag.error_definition
-        args = diag.args
-        span_error = diag.span_errors
-        name_file  = diag.name_file
-        msg_rendered = []
-        
-        # Formateo de argumentos
-        if not args is None:
-            msg = err_def.message.format_map(args)
-            
-        else:
-            msg = err_def.message
-        
-        # Header de error
-        if err_def.severity == Severity.ERROR:
-            msg_rendered.append(f"error[{err_def.error_code.name}]: {msg}\n")
-        else:
-            msg_rendered.append(f"warning[{err_def.error_code.name}]: {msg}\n")
-            
-        
-        
-        if diag.traceback:
-            msg_rendered.append(f"--> {name_file}\n")
-            self.format_traceback(diag.call_stack, msg_rendered)
-            
-            self.format_note_and_zonny(
-                msg_rendered,
-                0,
-                err_def,
-                args
-            )
+        args    = diag.args
+        out     = []
 
-        else:
-            msg_rendered.append(f"--> {name_file}:{span_error[0][0].line_start}:{span_error[0][0].column_start}\n")
-            space_line = self.format_span_message(
-                diag.span_code,
-                msg_rendered,
-                diag.span_errors,
-                args
-            )
-            
-            if not is_repeated:
-                self.format_note_and_zonny(
-                    msg_rendered,
-                    space_line,
-                    err_def,
-                    args
-                )
-                
-                
-        return "".join(msg_rendered)
+        # header
+        msg = err_def.message.format_map(args) if args else err_def.message
+        severity = "error" if err_def.severity == Severity.ERROR else "warning"
+        out.append(f"{severity}[{err_def.error_code.name}]: {msg}\n")
+
+        # location + source
+        first_label_span = diag.span_errors[0][0]
+        out.append(f"--> {diag.name_file}:{first_label_span.line_start}:{first_label_span.column_start}\n")
+
+        num_width = self._render_spans(diag.span_code, out, diag.span_errors, args or {})
+
+        # note and zonny face only on the first occurrence of this error code
+        if not is_repeat:
+            self._render_footer(out, num_width, err_def, args)
+
+        return "".join(out)

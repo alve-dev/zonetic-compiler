@@ -1,4 +1,4 @@
-from .enviroment import Enviroment
+from .enviroment import Environment
 from .symbol import Symbol, FuncSymbol
 
-__all__ = ["Enviroment", "Symbol", "FuncSymbol"]
+__all__ = ["Environment", "Symbol", "FuncSymbol"]

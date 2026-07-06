@@ -1,34 +1,41 @@
 class FileMap:
-    def __init__(self, code: str):
-        self.line_starts = [0]
-        self.code = code
-        for offset, char in enumerate(self.code):
+    """Maps byte offsets in source code to (line, column) positions.
+
+    Built once at startup by scanning the source for newlines.
+    All lookups are O(log n) via binary search over the line-start table.
+    """
+
+    def __init__(self, source: str) -> None:
+        self.source = source
+
+        # _line_starts[i] is the byte offset where line (i+1) begins.
+        # We seed with 0 (line 1 starts at the very beginning) and append
+        # one sentinel equal to len(source) so the last line is handled
+        # cleanly without special-casing.
+        self._line_starts = [0]
+        for offset, char in enumerate(source):
             if char == '\n':
-                self.line_starts.append(offset + 1)
-        self.line_starts.append(len(self.code))
-            
-                
-                
+                self._line_starts.append(offset + 1)
+        self._line_starts.append(len(source))
+
     def get_location(self, offset: int) -> tuple[int, int]:
-        """line = index 0, column = index 1"""
-        
-        start = 0
-        end = len(self.line_starts) - 1
-        line_idx = 0 # Guardará el índice de la línea encontrada
-        
-        # Búsqueda binaria de "Piso" (Floor search)
-        while start <= end:
-            half = (start + end) // 2
-            
-            if self.line_starts[half] <= offset:
-                line_idx = half     # Este es un candidato posible, guardamos el índice
-                start = half + 1    # Intentamos buscar uno más a la derecha
+        """Return the (line, column) for a byte offset in the source.
+
+        Both line and column are 1-based.
+        Uses a floor binary search to find which line the offset falls on.
+        """
+        lo = 0
+        hi = len(self._line_starts) - 1
+        line_idx = 0
+
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if self._line_starts[mid] <= offset:
+                line_idx = mid  # best candidate so far, keep searching right
+                lo = mid + 1
             else:
-                end = half - 1      # Es muy alto, buscamos a la izquierda
-        
-        # Una vez encontrado el índice de la línea:
+                hi = mid - 1
+
         line = line_idx + 1
-        column = offset - self.line_starts[line_idx] + 1
-        
+        column = offset - self._line_starts[line_idx] + 1
         return line, column
-        

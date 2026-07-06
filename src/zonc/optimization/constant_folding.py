@@ -1,546 +1,511 @@
-from zonc.zonast import *
-from zonc.enviroment import *
-from zonc.zonc_errors import *
-import struct
-import math
+"""Constant folding optimization pass.
 
-RANGES = {
-    'int32': (-2_147_483_648, 2_147_483_647),
-    'int64': (-9_223_372_036_854_775_808, 9_223_372_036_854_775_807)
+Walks the AST before code generation and evaluates expressions whose
+values are fully known at compile time, replacing them with literals.
+This lets the emitter see simple loads instead of arithmetic chains,
+and also catches divide-by-zero and overflow before runtime.
+
+Only immutable variables are inlined — mutable ones are left alone
+because their value can change between the fold pass and execution.
+"""
+
+import math
+import struct
+
+from zonc.zonast import *
+from zonc.enviroment import Environment, Symbol, FuncSymbol
+from zonc.zonc_errors import DiagnosticEngine, ErrorCode
+
+
+# Integer range limits used for overflow checking.
+_INT_RANGES = {
+    "int32": (-2_147_483_648, 2_147_483_647),
+    "int64": (-9_223_372_036_854_775_808, 9_223_372_036_854_775_807),
 }
 
+# Mask for keeping shift results within 64 bits.
+_U64_MASK  = 0xFFFF_FFFF_FFFF_FFFF
+_I64_SIGN  = 0x8000_0000_0000_0000
+_I64_RANGE = 0x1_0000_0000_0000_0000
+
+
 class ConstantFolding:
-    def __init__(self, reporter: DiagnosticEngine):
-        self.reporter = reporter
-        
-    def visit_If(self, node: IfForm, scope: Enviroment):
-        folded_cond_if = self.evaluate_static_value(node.if_branch.cond, scope)
-        new_cond = self.transform_to_zonvalue(folded_cond_if)
-        node.if_branch.cond = new_cond
-        if not node.elif_branches is None:
+    """Folds constant expressions in-place across the whole AST."""
+
+    def __init__(self, diag: DiagnosticEngine) -> None:
+        self._diag = diag
+
+    # ------------------------------------------------------------------
+    # Entry point
+    # ------------------------------------------------------------------
+
+    def visit_Program(self, node: Program | BlockExpr, top_level: bool = False) -> None:
+        """Fold every statement in a program or block node."""
+        scope: Environment = node.scope
+        scope.clear()
+
+        if top_level:
+            self._pre_scan(node, scope)
+
+        for stmt in node.stmts:
+            if isinstance(stmt, DeclarationStmt):
+                scope.define(stmt.name, Symbol(stmt.mut, stmt.type, True, stmt.span))
+
+            elif isinstance(stmt, AssignmentStmt):
+                self._fold_assignment(stmt, scope)
+
+            elif isinstance(stmt, InitializationStmt):
+                self._fold_initialization(stmt, scope)
+
+            elif isinstance(stmt, BlockExpr):
+                self.visit_Program(stmt)
+
+            elif isinstance(stmt, IfForm):
+                self._fold_if(stmt, scope)
+                self.visit_Program(stmt.if_branch.block)
+                if stmt.elif_branches is not None:
+                    for branch in stmt.elif_branches:
+                        self.visit_Program(branch.block)
+                if stmt.else_branch is not None:
+                    self.visit_Program(stmt.else_branch.block)
+
+            elif isinstance(stmt, GiveStmt):
+                folded = self._eval(stmt.value, scope)
+                stmt.value = self._to_node(folded)
+                return folded
+
+            elif isinstance(stmt, CallFunc):
+                self._fold_call(stmt, scope)
+
+            elif isinstance(stmt, FuncForm):
+                self.visit_Program(stmt.block_expr)
+
+            else:
+                return None
+
+    # ------------------------------------------------------------------
+    # Pre-scan: register functions and their params before folding bodies
+    # ------------------------------------------------------------------
+
+    def _pre_scan(self, node: Program, scope: Environment) -> None:
+        """Register all top-level functions so calls inside them can be folded."""
+        for stmt in node.stmts:
+            if not isinstance(stmt, FuncForm):
+                continue
+
+            # void functions always need an explicit return at the end
+            if stmt.return_type.num == 5:
+                stmt.block_expr.stmts.append(ReturnStmt(None, None))
+
+            if stmt.params is not None:
+                for param in stmt.params:
+                    scope.define(param.name, Symbol(param.mut, param.zontype, True, param.span))
+
+            scope.define(stmt.name, FuncSymbol(stmt.params, stmt.span, stmt.span_name, stmt.return_type))
+
+    # ------------------------------------------------------------------
+    # Statement visitors
+    # ------------------------------------------------------------------
+
+    def _fold_if(self, node: IfForm, scope: Environment) -> None:
+        """Fold the condition of every branch in an if form."""
+        node.if_branch.cond = self._to_node(self._eval(node.if_branch.cond, scope))
+
+        if node.elif_branches is not None:
             for i, branch in enumerate(node.elif_branches):
-                folded_cond_elif = self.evaluate_static_value(branch.cond, scope)
-                new_cond = self.transform_to_zonvalue(folded_cond_elif)
-                node.elif_branches[i].cond = new_cond
-    
-    def visit_Initialization(self, node: InitializationStmt, scope: Enviroment):
-        span = node.assign_stmt.value.span
-        folded = self.evaluate_static_value(node.assign_stmt.value, scope, True)
-        new_node = None
-        new_value = None
+                node.elif_branches[i].cond = self._to_node(self._eval(branch.cond, scope))
+
+    def _fold_initialization(self, node: InitializationStmt, scope: Environment) -> None:
+        """Fold the right-hand side of a declaration+assignment and store the result."""
+        span   = node.assign_stmt.value.span
+        folded = self._eval(node.assign_stmt.value, scope, in_var=True)
+
+        # folded can be (original_expr, folded_value) when the expr is compound
         if isinstance(folded, tuple):
-            new_node = self.transform_to_zonvalue(folded[1])
-            new_node.span = span
+            literal = self._to_node(folded[1])
             new_value = folded[0]
         else:
-            new_node = self.transform_to_zonvalue(folded)
-            new_node.span = span
-            new_value = new_node
-            
+            literal = self._to_node(folded)
+            new_value = literal
+
+        literal.span = span
+
         symbol = Symbol(node.decl_stmt.mut, node.decl_stmt.type, False, node.decl_stmt.span)
         scope.define(node.decl_stmt.name, symbol)
-        
-        if isinstance(new_node, IntLiteral):
-            error = False
-            if symbol.zontype.num in [1, 6]:
-                error = self.check_range_int(new_node.value, symbol.zontype.name, span)
-            
-            if not error:
-                node.assign_stmt.value = new_value
-                symbol.value = new_node
-                
-        elif isinstance(new_node, FloatLiteral):
-            error = False
-            if symbol.zontype.num in [2, 7]:
-                error = self.check_range_float(new_node.value, symbol.zontype.name, span)
-            
-            if not error:
-                node.assign_stmt.value = new_value
-                symbol.value = new_node
-                
-        elif isinstance(new_node, BoolLiteral):
-            node.assign_stmt.value = new_value
-            symbol.value = new_node if True else False
-        
-        elif isinstance(new_node, CallFunc):
-            return
-        
-        else:
-            node.assign_stmt.value = new_value
-            symbol.value = new_node
-        
-    def visit_Assignment(self, node: AssignmentStmt, scope: Enviroment):
-        span = node.value.span
-        folded = self.evaluate_static_value(node.value, scope, True)
-        new_node = None
-        new_value = None
+
+        self._apply_folded(node.assign_stmt, symbol, literal, new_value, span, target="value")
+
+    def _fold_assignment(self, node: AssignmentStmt, scope: Environment) -> None:
+        """Fold the right-hand side of a plain assignment."""
+        span   = node.value.span
+        folded = self._eval(node.value, scope, in_var=True)
+
         if isinstance(folded, tuple):
-            new_node = self.transform_to_zonvalue(folded[1])
-            new_node.span = span
+            literal = self._to_node(folded[1])
             new_value = folded[0]
         else:
-            new_node = self.transform_to_zonvalue(folded)
-            new_node.span = span
-            new_value = new_node
-            
-        symbol = scope.get_symbol(node.name)
-        
-        if isinstance(new_node, IntLiteral):
-            error = False
-            if symbol.zontype.num in [1, 6]:
-                error = self.check_range_int(new_node.value, symbol.zontype.name, span)
-            
-            if not error:
-                node.value = new_value
-                symbol.value = new_node
-                
-        elif isinstance(new_node, FloatLiteral):
-            error = False
-            if symbol.zontype.num in [2, 7]:
-                error = self.check_range_float(new_node.value, symbol.zontype.name, span)
-            
-            if not error:
-                node.value = new_value
-                symbol.value = new_node
-                
-        elif isinstance(new_node, BoolLiteral):
-            node.value = new_value
-            symbol.value = new_node if True else False
-            
-        elif isinstance(new_node, CallFunc):
-            return
-            
+            literal = self._to_node(folded)
+            new_value = literal
+
+        literal.span = span
+
+        symbol = scope.get(node.name)
+        self._apply_folded(node, symbol, literal, new_value, span, target="value")
+
+    def _apply_folded(self, node, symbol: Symbol, literal, new_value, span, target: str) -> None:
+        """Write the folded value back into node and update the symbol table."""
+        if isinstance(literal, IntLiteral):
+            if symbol.zontype.num in (1, 6):
+                if self._check_int_range(literal.value, symbol.zontype.name, span):
+                    return
+            setattr(node, target, new_value)
+            symbol.value = literal
+
+        elif isinstance(literal, FloatLiteral):
+            if symbol.zontype.num in (2, 7):
+                if self._check_float_range(literal.value, symbol.zontype.name, span):
+                    return
+            setattr(node, target, new_value)
+            symbol.value = literal
+
+        elif isinstance(literal, BoolLiteral):
+            setattr(node, target, new_value)
+            symbol.value = literal
+
+        elif isinstance(literal, CallFunc):
+            return  # cannot fold a call result at compile time
+
         else:
-            node.value = new_value
-            symbol.value = new_node
+            setattr(node, target, new_value)
+            symbol.value = literal
 
-    def evaluate_static_value(self, node, scope: Enviroment, in_var = False):
+    def _fold_call(self, node: CallFunc, scope: Environment) -> None:
+        """Resolve keyword-params to positional, then fold each argument."""
+        self._resolve_keyparams(node, scope)
+
+        if node.params is None:
+            return
+
+        for i, param in enumerate(node.params):
+            span   = param.span
+            folded = self._eval(param, scope, in_var=True)
+            result = self._to_node(folded)
+            result.span = span
+
+            if isinstance(result, IntLiteral):
+                if not self._check_int_range(result.value, "int64", span):
+                    node.params[i] = result
+            elif isinstance(result, FloatLiteral):
+                if not self._check_float_range(result.value, "double", span):
+                    node.params[i] = result
+            else:
+                node.params[i] = result
+
+    def _resolve_keyparams(self, node: CallFunc, scope: Environment) -> None:
+        """Reorder keyword arguments to match the positional parameter list.
+
+        After this, node.params is a plain positional list and node.keyparams
+        is consumed. Builtins that accept variadic args are skipped.
+        """
+        _VARIADIC_BUILTINS = {"print", "println", "alloc", "store", "load"}
+        if node.name in _VARIADIC_BUILTINS:
+            return
+
+        if node.params is None:
+            return
+
+        func = scope.get(node.name)
+        ordered = [0] * len(func.params)
+
+        for i, param in enumerate(node.params):
+            ordered[i] = param
+
+        if node.keyparams is not None:
+            for key, (val_expr, _span, _key_span) in node.keyparams.items():
+                for i, param in enumerate(func.params):
+                    if key == param.name:
+                        ordered[i] = val_expr
+                        break
+
+        node.params = ordered
+
+    # ------------------------------------------------------------------
+    # Core evaluator
+    # ------------------------------------------------------------------
+
+    def _eval(self, node, scope: Environment, in_var: bool = False):
+        """Recursively evaluate node to a Python value if possible.
+
+        Returns a Python int/float/bool/str when the value is known,
+        or the original AST node when it cannot be determined at compile time.
+        A (original_node, python_value) tuple is returned from BinaryExpr
+        when only one side could be folded — the original node is kept for
+        the emitter but the python value is used for further folding.
+        """
         match node:
+
             case BinaryExpr():
-                left = self.evaluate_static_value(node.left, scope, in_var)
-                right = self.evaluate_static_value(node.right, scope, in_var)
-
-                if (isinstance(left, (int, float)) and not isinstance(left, bool)) and (isinstance(right, (int, float)) and not isinstance(right, bool)):
-                    try:
-                        match node.operator:
-                            case Operator.ADD: return left + right
-                            case Operator.SUB: return left - right
-                            case Operator.MUL: return left * right
-                            case Operator.DIV:
-                                if isinstance(left, float):
-                                    if right == 0:
-                                        if left == 0:
-                                            self.reporter.emit(
-                                                ErrorCode.E5003, None, [node.span], [(node.span, "0.0 divided by 0.0 is mathematically undefined")]
-                                            )
-                                            
-                                        else:
-                                            inf = ""
-                                            if left > 0:
-                                                inf = "+Inf"
-                                            elif left < 0:
-                                                inf = "-Inf"
-                                                
-                                            self.reporter.emit(
-                                                ErrorCode.E5002, { "inf" : inf }, [node.span], [(node.span, "this division results in an infinite value")]
-                                            )
-                                    
-                                        return node
-                                    return left / right
-
-                                if right == 0:
-                                    self.reporter.emit(
-                                        ErrorCode.E5001, None, [node.span], [(node.right.span, "constant folding evaluated this divisor to zero")]
-                                    )
-                                    return node
-                                
-                                return left / right
-                            
-                            case Operator.MOD:
-                                if isinstance(left, float):
-                                    if right == 0:
-                                        self.reporter.emit(
-                                            ErrorCode.E5001, None, [node.span], [(node.right.span, "constant folding evaluated this divisor to zero")]
-                                        )
-                                        return node
-                                    return math.fmod(left, right)
-
-                                else:
-                                    if right == 0:
-                                        self.reporter.emit(
-                                            ErrorCode.E5001, None, [node.span], [(node.right.span, "constant folding evaluated this divisor to zero")]
-                                        )
-                                        return node
-                                    return left % right
-                                
-                            case Operator.LT:
-                                return left < right
-                            
-                            case Operator.GT:
-                                return left > right
-                            
-                            case Operator.LE:
-                                return left <= right
-                            
-                            case Operator.GE:
-                                return left >= right
-                            
-                            case Operator.EQ:
-                                return left == right
-                            
-                            case Operator.NE:
-                                return left != right
-                            
-                            case Operator.BAND:
-                                return left & right
-                            
-                            case Operator.BXOR:
-                                return left ^ right
-                            
-                            case Operator.BOR:
-                                return left | right
-                            
-                            case Operator.BNAND:
-                                return ~(left & right)
-                            
-                            case Operator.BXNOR:
-                                return ~(left ^ right)
-                            
-                            case Operator.BNOR:
-                                return ~(left | right)
-                            
-                            case Operator.SL | Operator.SR:
-                                if right < 0 or right > 63:
-                                    print("ERROR de shift temporal")
-                                    return 0
-                                
-                                if node.operator == Operator.SL:
-                                    resultado = (left << right) & 0xFFFFFFFFFFFFFFFF
-                                    if resultado >= 0x8000000000000000:
-                                        return resultado - 0x10000000000000000
-                                    return resultado
-                                
-                                else:
-                                    if left < 0 or (left & (1 << 63)):
-                                        left_signado = left if left < 0 else left - (1 << 64)
-                                        resultado = left_signado >> right
-                                    else:
-                                        resultado = left >> right
-                                        
-                                    resultado_64 = resultado & 0xFFFFFFFFFFFFFFFF
-                                    if resultado_64 >= 0x8000000000000000:
-                                        return resultado_64 - 0x10000000000000000
-                                    return resultado_64
-    
-                            # recordar poner POW
-                            
-
-                    except OverflowError:
-                        return float("inf")
-                elif isinstance(left, bool) and isinstance(right, bool):
-                    match node.operator:
-                        case Operator.AND:
-                            return left and right
-                        
-                        case Operator.OR:
-                            return left or right
-                        
-                        case Operator.EQ:
-                            return left == right
-                        
-                        case Operator.NE:
-                            return left != right
-                        
-                elif isinstance(left, str) and isinstance(right, str):
-                    match node.operator:
-                        case Operator.CONCAT:
-                            return left + right
-                        
-                        case Operator.EQ_STR:
-                            return left == right
-                        
-                        case Operator.NE_STR:
-                            return left != right
-                        
-                node.left = self.transform_to_zonvalue(left)
-                node.right = self.transform_to_zonvalue(right)
-                return node
+                return self._eval_binary(node, scope, in_var)
 
             case IntLiteral():
                 if in_var:
                     return node.value
-                
-                if self.check_range_int(node.value, "int64", node.span):
+                if self._check_int_range(node.value, "int64", node.span):
                     return node
                 return node.value
-            
+
             case FloatLiteral():
                 if math.isinf(node.value):
-                    inf = ""
-                    if node.value == math.inf:
-                        inf = "inf"
-                    else:
-                        inf = "-inf"
-                    
-                    self.reporter.emit(
-                        ErrorCode.E5005, 
-                        { "target_type": "double", "max_val": "1.79e308", "inf" : inf }, 
-                        [node.span], 
-                        [(node.span, "value exceeds {target_type} range")]
+                    sign = "inf" if node.value > 0 else "-inf"
+                    self._diag.emit(
+                        ErrorCode.E5005,
+                        {"target_type": "double", "max_val": "1.79e308", "inf": sign},
+                        [node.span], [(node.span, "value exceeds {target_type} range")],
                     )
                     return node
-                
                 if in_var:
                     return node.value
-                
-                if self.check_range_float(node.value, "double", node.span):
+                if self._check_float_range(node.value, "double", node.span):
                     return node
                 return node.value
-            
+
             case BoolLiteral():
-                return True if node.value else False
+                return bool(node.value)
 
             case StringLiteral():
                 return node.value
-            
+
             case VariableExpr():
-                symbol = scope.get_symbol(node.name)
-                if not symbol.mutability:
-                    if not symbol.is_empty and symbol.value is not None:
-                        return self.evaluate_static_value(symbol.value, scope, in_var)
+                symbol = scope.get(node.name)
+                if not symbol.mutability and not symbol.is_empty and symbol.value is not None:
+                    return self._eval(symbol.value, scope, in_var)
                 return node
-            
+
             case UnaryExpr():
-                value = self.evaluate_static_value(node.value, scope, in_var)
-                if isinstance(value, (int, float)):
-                    match node.operator:
-                        case Operator.NEG: return -(value)
-                        case Operator.BNOT: return ~(value)
-                
-                elif isinstance(value, bool) and node.operator == Operator.NOT:
-                    return (not value)
-                
-                node.value = self.transform_to_zonvalue(value)
+                val = self._eval(node.value, scope, in_var)
+                if isinstance(val, (int, float)) and not isinstance(val, bool):
+                    if node.operator == Operator.NEG:  return -val
+                    if node.operator == Operator.BNOT: return ~val
+                if isinstance(val, bool) and node.operator == Operator.NOT:
+                    return not val
+                node.value = self._to_node(val)
                 return node
+
+            case CastExpr():
+                return self._eval_cast(node, scope, in_var)
 
             case BlockExpr():
                 self.visit_Program(node)
                 return node
-            
+
             case IfForm():
-                self.visit_If(node, scope)
+                self._fold_if(node, scope)
                 self.visit_Program(node.if_branch.block)
-                    
-                if not node.elif_branches is None:
+                if node.elif_branches is not None:
                     for branch in node.elif_branches:
                         self.visit_Program(branch.block)
-                        
-                if not node.else_branch is None:
+                if node.else_branch is not None:
                     self.visit_Program(node.else_branch.block)
-                    
                 return node
-            
+
             case CallFunc():
-                self.visit_CallFunc(node, scope)
+                self._fold_call(node, scope)
                 return node
-            
-            case CastExpr():
-                value = self.evaluate_static_value(node.value, scope, in_var)
-                
-                if node.zontype.num == 1:
-                    if isinstance(value, bool):
-                        return 1 if value else 0
-                    
-                    elif isinstance(value, int):
-                        return value
-                    
-                    else:
-                        return node
-                    
-                elif node.zontype.num == 3:
-                    if isinstance(value, bool):
-                        return value
-                    
-                    elif isinstance(value, int):
-                        return True if value != 0 else False
-                    
-                    else:
-                        return node
-                    
-            
+
             case _:
                 return node
 
-    def transform_to_zonvalue(self, value):
-        if isinstance(value, int) and not isinstance(value, bool): return IntLiteral(value)
-        if isinstance(value, float): return FloatLiteral(value)
-        if isinstance(value, bool): return BoolLiteral(1 if value else 0)
-        if isinstance(value, str): return StringLiteral(value)
-        else: return value
-                
-    def check_range_int(self, new_value, target_type, span) -> bool:
-        min_val, max_val = RANGES.get(target_type, (0, 0))
-        if new_value > max_val:
-            magnitud = ""
-            if target_type == "int32": magnitud = "~2.14 billion"
-            if target_type == "int64": magnitud = "~9.22 quintillion"
-            
-            self.reporter.emit(
-                ErrorCode.E5004, { "type_int" : target_type, "magnitud" : magnitud }, [span], [(span, "value is too large for type `{type_int}`")]
-            )
-            return True
-        
-        elif new_value < min_val:
-            magnitud = ""
-            if target_type == "int32": magnitud = "~ -2.14 billion"
-            if target_type == "int64": magnitud = "~ -9.22 quintillion"
-            
-            self.reporter.emit(
-                ErrorCode.E5005, { "type_int" : target_type, "magnitud" : magnitud }, [span], [(span, "value is too small for type `{type_int}`")]
-            )
-            return True
-        return False
-    
-    def check_range_float(self, value, target_type, span) -> bool | None:
-        fmt = 'f' if target_type == "float" else 'd'
-        max_val = "3.40e38" if target_type == "float" else "1.79e308"
-        
-        try:
-            packed = struct.pack(fmt, value)
-            unpacked_val = struct.unpack(fmt, packed)[0]
-            
-            if math.isinf(unpacked_val) and not math.isinf(value):
-                inf = ""
-                if unpacked_val > 0:
-                    inf = "inf"
-                else:
-                    inf = "-inf"
-                
-                self.reporter.emit(
-                    ErrorCode.E5005, 
-                    { "target_type": target_type, "max_val": max_val, "inf" : inf }, 
-                    [span], 
-                    [(span, f"value exceeds {target_type} range")]
-                )
-                return True
-            
-            elif unpacked_val == 0.0 and value != 0.0:
-                min_val = "1.18e-38" if target_type == "float" else "2.23e-308"
+    # ------------------------------------------------------------------
+    # Binary expression evaluation
+    # ------------------------------------------------------------------
 
-                self.reporter.emit(
-                    ErrorCode.W5001,
-                    { "target_type": target_type, "min_val": min_val },
-                    [span],
-                    [(span, f"value exceeds {target_type} range minimal")]
-                )
-    
-                return False
-            
+    def _eval_binary(self, node: BinaryExpr, scope: Environment, in_var: bool):
+        left  = self._eval(node.left,  scope, in_var)
+        right = self._eval(node.right, scope, in_var)
+
+        is_num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+
+        if is_num(left) and is_num(right):
+            try:
+                result = self._apply_numeric_op(node, left, right)
+                if result is not node:
+                    return result
+            except OverflowError:
+                return float("inf")
+
+        elif isinstance(left, bool) and isinstance(right, bool):
+            result = self._apply_bool_op(node, left, right)
+            if result is not node:
+                return result
+
+        elif isinstance(left, str) and isinstance(right, str):
+            result = self._apply_str_op(node, left, right)
+            if result is not node:
+                return result
+
+        # partial fold: update children even if the whole expr can't be reduced
+        node.left  = self._to_node(left)
+        node.right = self._to_node(right)
+        return node
+
+    def _apply_numeric_op(self, node: BinaryExpr, left, right):
+        op = node.operator
+        match op:
+            case Operator.ADD: return left + right
+            case Operator.SUB: return left - right
+            case Operator.MUL: return left * right
+
+            case Operator.DIV:
+                if right == 0:
+                    if isinstance(left, float):
+                        sign = "+Inf" if left > 0 else "-Inf"
+                        self._diag.emit(ErrorCode.E5002, {"inf": sign}, [node.span],
+                            [(node.span, "this division results in an infinite value")])
+                    else:
+                        self._diag.emit(ErrorCode.E5001, None, [node.span],
+                            [(node.right.span, "constant folding evaluated this divisor to zero")])
+                    return node
+                return left / right if isinstance(left, float) else left / right
+
+            case Operator.MOD:
+                if right == 0:
+                    self._diag.emit(ErrorCode.E5001, None, [node.span],
+                        [(node.right.span, "constant folding evaluated this divisor to zero")])
+                    return node
+                return math.fmod(left, right) if isinstance(left, float) else left % right
+
+            case Operator.LT:  return left < right
+            case Operator.GT:  return left > right
+            case Operator.LE:  return left <= right
+            case Operator.GE:  return left >= right
+            case Operator.EQ:  return left == right
+            case Operator.NE:  return left != right
+
+            case Operator.BAND:  return left & right
+            case Operator.BXOR:  return left ^ right
+            case Operator.BOR:   return left | right
+            case Operator.BNAND: return ~(left & right)
+            case Operator.BXNOR: return ~(left ^ right)
+            case Operator.BNOR:  return ~(left | right)
+
+            case Operator.SL | Operator.SR:
+                return self._eval_shift(node, left, right)
+
+            # TODO: add Operator.POW when the emitter supports it
+
+        return node
+
+    def _eval_shift(self, node: BinaryExpr, left: int, right: int):
+        if right < 0 or right > 63:
+            print("error temporal de shift")
+            return node
+
+        if node.operator == Operator.SL:
+            result = (left << right) & _U64_MASK
+            return result - _I64_RANGE if result >= _I64_SIGN else result
+
+        # arithmetic right shift (sign-extending)
+        signed = left if left < 0 else (left - _I64_RANGE if left & _I64_SIGN else left)
+        result = (signed >> right) & _U64_MASK
+        return result - _I64_RANGE if result >= _I64_SIGN else result
+
+    def _apply_bool_op(self, node: BinaryExpr, left: bool, right: bool):
+        match node.operator:
+            case Operator.AND: return left and right
+            case Operator.OR:  return left or right
+            case Operator.EQ:  return left == right
+            case Operator.NE:  return left != right
+        return node
+
+    def _apply_str_op(self, node: BinaryExpr, left: str, right: str):
+        match node.operator:
+            case Operator.CONCAT: return left + right
+            case Operator.EQ_STR: return left == right
+            case Operator.NE_STR: return left != right
+        return node
+
+    # ------------------------------------------------------------------
+    # Cast expression evaluation
+    # ------------------------------------------------------------------
+
+    def _eval_cast(self, node: CastExpr, scope: Environment, in_var: bool):
+        val = self._eval(node.value, scope, in_var)
+
+        if node.zontype.num == 1:   # int64
+            if isinstance(val, bool): return 1 if val else 0
+            if isinstance(val, int):  return val
+            return node
+
+        if node.zontype.num == 3:   # bool
+            if isinstance(val, bool): return val
+            if isinstance(val, int):  return val != 0
+            return node
+
+        return node
+
+    # ------------------------------------------------------------------
+    # Value ↔ AST node conversion
+    # ------------------------------------------------------------------
+
+    def _to_node(self, value) -> NodeExpr:
+        """Convert a Python value back to the matching AST literal node."""
+        if isinstance(value, bool):
+            return BoolLiteral(1 if value else 0)
+        if isinstance(value, int):
+            return IntLiteral(value)
+        if isinstance(value, float):
+            return FloatLiteral(value)
+        if isinstance(value, str):
+            return StringLiteral(value)
+        return value  # already an AST node
+
+    # ------------------------------------------------------------------
+    # Range checking
+    # ------------------------------------------------------------------
+
+    def _check_int_range(self, value: int, type_name: str, span) -> bool:
+        """Emit an error if value is out of range for type_name. Returns True on error."""
+        lo, hi = _INT_RANGES.get(type_name, (0, 0))
+        magnitude = {"int32": "~2.14 billion", "int64": "~9.22 quintillion"}.get(type_name, "")
+
+        if value > hi:
+            self._diag.emit(ErrorCode.E5004, {"type_int": type_name, "magnitud": magnitude},
+                [span], [(span, "value is too large for type `{type_int}`")])
+            return True
+
+        if value < lo:
+            neg_magnitude = {"int32": "~ -2.14 billion", "int64": "~ -9.22 quintillion"}.get(type_name, "")
+            self._diag.emit(ErrorCode.E5005, {"type_int": type_name, "magnitud": neg_magnitude},
+                [span], [(span, "value is too small for type `{type_int}`")])
+            return True
+
+        return False
+
+    def _check_float_range(self, value: float, type_name: str, span) -> bool:
+        """Emit an error or warning if value is out of range for type_name.
+        Returns True on error, False on underflow warning (which is non-fatal).
+        """
+        fmt     = "f" if type_name == "float" else "d"
+        max_str = "3.40e38" if type_name == "float" else "1.79e308"
+
+        try:
+            packed   = struct.pack(fmt, value)
+            repacked = struct.unpack(fmt, packed)[0]
         except (OverflowError, ValueError):
             return True
-            
+
+        if math.isinf(repacked) and not math.isinf(value):
+            sign = "inf" if repacked > 0 else "-inf"
+            self._diag.emit(ErrorCode.E5005,
+                {"target_type": type_name, "max_val": max_str, "inf": sign},
+                [span], [(span, f"value exceeds {type_name} range")])
+            return True
+
+        if repacked == 0.0 and value != 0.0:
+            min_str = "1.18e-38" if type_name == "float" else "2.23e-308"
+            self._diag.emit(ErrorCode.W5001,
+                {"target_type": type_name, "min_val": min_str},
+                [span], [(span, f"value underflows {type_name} minimum")])
+            return False
+
         return False
-    
-    def visit_CallFunc(self, node: CallFunc, scope: Enviroment):
-        self.keyparams_pos(node, scope)
-        if node.params is not None:
-            for i in range(len(node.params)):
-                span = node.params[i].span
-                folded_param = self.evaluate_static_value(node.params[i], scope, True)
-                new_param = self.transform_to_zonvalue(folded_param)
-                new_param.span = span
-                if isinstance(new_param, IntLiteral):
-                    if not self.check_range_int(new_param.value, "int64", span):
-                        node.params[i] = new_param
-                
-                elif isinstance(new_param, FloatLiteral):
-                    if not self.check_range_float(new_param.value, "double", span):
-                        node.params[i] = new_param
-                        
-                else:
-                    node.params[i] = new_param
-                    
-    def keyparams_pos(self, node: CallFunc, scope: Enviroment):
-        if node.name in ["print", "alloc", "store", "load", "println"]:
-            return
-        
-        if node.params is not None:
-            func_symbol = scope.get_symbol(node.name)
-            new_params = [0] * len(func_symbol.params)
-            if node.params is not None:
-                for i, param in enumerate(node.params):
-                    new_params[i] = param
-                    
-            if node.keyparams is not None:
-                for key, value in node.keyparams.items():
-                    indice = 0
-                    for i, param in enumerate(func_symbol.params):
-                        if key == param.name:
-                            indice = i
-                            break
-                            
-                    new_params[indice] = value[0]
-        
-            node.params = new_params
-        
-    def pre_scan(self, node: Program, scope: Enviroment):
-        for stmt in node.stmts:
-            if isinstance(stmt, FuncForm):
-                if stmt.return_type.num == 5:
-                    stmt.block_expr.stmts.append(ReturnStmt(None, None))
-                
-                if stmt.params is not None:
-                    for param in stmt.params:
-                        symbol = Symbol(param.mut, param.zontype, True, param.span)
-                        scope.define(param.name, symbol)
-                
-                func_symbol = FuncSymbol(stmt.params, stmt.span, stmt.span_name, stmt.return_type)  
-                scope.define(stmt.name, func_symbol)
-                
-        
-    def visit_Program(self, node: Program | BlockExpr, top_level: bool = False):
-        scope: Enviroment = node.scope
-        scope.values.clear()
-        if top_level: self.pre_scan(node, node.scope)
-        
-        for stmt in node.stmts:
-            if isinstance(stmt, DeclarationStmt):
-                symbol = Symbol(stmt.mut, stmt.type, True, stmt.span)
-                scope.define(stmt.name, symbol)
-                
-            elif isinstance(stmt, AssignmentStmt):
-                self.visit_Assignment(stmt, scope)
-            
-            elif isinstance(stmt, InitializationStmt):
-                self.visit_Initialization(stmt, scope)
-            
-            elif isinstance(stmt, BlockExpr):
-                self.visit_Program(stmt)
-                
-            elif isinstance(stmt, IfForm):
-                self.visit_If(stmt, scope)
-                self.visit_Program(stmt.if_branch.block)
-                if not stmt.elif_branches is None:
-                    for branch in stmt.elif_branches:
-                        self.visit_Program(branch.block)
-                        
-                if not stmt.else_branch is None:
-                    self.visit_Program(stmt.else_branch.block)
-                
-            elif isinstance(stmt, GiveStmt):
-                value = self.evaluate_static_value(stmt.value, scope)
-                value_new = self.transform_to_zonvalue(value)
-                stmt.value = value_new
-                return value
-            
-            elif isinstance(stmt, CallFunc):
-                self.visit_CallFunc(stmt, scope)
-                    
-            elif isinstance(stmt, FuncForm):
-                self.visit_Program(stmt.block_expr)
-            
-            else:
-                return None
-                
-    
-            

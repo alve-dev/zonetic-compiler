@@ -1,201 +1,157 @@
+"""CLI entry point for Zonetic.
+
+Parses sys.argv and dispatches to the appropriate command function.
+Structure: zon <area> [flag] [arguments]
+"""
+
 import sys
-from .cmd_zonc import cmd_zon_run, cmd_zon_version, cmd_zon_help, cmd_zon_set_path, cmd_zon_show_path, cmd_zon_clear_path
-from .cmd_zonc import cmd_zon_set_file, cmd_zon_compile
-from zonc.utils import levenshtein_zon, disassemble_file
+from .cmd_zonc import cmd_compile, cmd_repl, cmd_forge, cmd_help
+from .buffer import read_lines
+from zonc.utils import levenshtein_zon, disassemble
 from .cmdregistry import COMMANDS
 
+VERSION = "Zonetic v2.0.0"
 
-def run_cli():
-    args = sys.argv[1:]
-    if len(args) == 0:
-        print("[zon error]: No command or file specified.")
-        print("-- The forge is idle. Use zon help to learn the commands and start building.")
+
+def _require_arg(args: list, flag: str, usage: str) -> str | None:
+    if not args:
+        print(f"[zon error]: No argument provided for {flag}.")
+        print(f"-- Usage: {usage}")
+        return None
+    return args[0]
+
+
+def _leven_hint(value: str, candidates: list[str]) -> str:
+    match = levenshtein_zon.suggest(value, candidates)
+    return f"Did you mean?: {match}" if match else "Use zon help to see the available commands."
+
+
+def _unknown_flag(area: str, flag: str, candidates: list[str]) -> None:
+    print(f"[zon error]: Unknown flag '{flag}' for area '{area}'.")
+    print(f"-- {_leven_hint(flag, candidates)}")
+    sys.exit(1)
+
+
+# ------------------------------------------------------------------
+# Area handlers
+# ------------------------------------------------------------------
+
+def _handle_compile(args: list) -> None:
+    path = _require_arg(args, "c", "zon c <file>.zon")
+    if path:
+        cmd_compile(path=path)
+
+
+def _handle_help(args: list) -> None:
+    cmd_help(COMMANDS, args[0] if args else None)
+
+
+def _handle_st(args: list) -> None:
+    if not args:
+        print("[zon error]: No flag provided for st.")
+        print("-- Usage: zon st <flag>")
         sys.exit(1)
-        
-    if args[0] == 'rin':
-        if len(args) < 2:
-            print("[zon error]: No file specified for the run command.")
-            print("-- The engine needs a target. Use zon rin <filename>.zon to start execution.")
-            sys.exit(1)
-            
-        cmd_zon_run(args[1])
-        
-    elif args[0] == 'c':
-        path = args[1:]
-        if len(path) < 1:
-            print("[zon error]: No file specified for the compile command.")
-            print("-- The engine needs a target. Use zon c <filename>.zon to start execution.")
-            sys.exit(1)
 
-        cmd_zon_compile(path[0])
-        
-    elif args[0] == "help":
-        params = args[1:]
-        if len(params) > 0:
-            cmd_zon_help(params[0], COMMANDS)
+    flag = args[0]
+    rest = args[1:]
+
+    if flag == "--file":
+        # zon st --file <path.zon> [endkey]
+        path = _require_arg(rest, "--file", "zon st --file <path/to/script.zon> [endkey]")
+        if path is None:
             return
-        
-        cmd_zon_help(commands=COMMANDS)
-        return
-    
-    elif args[0] == "st":
-        flag = args[1:]
-        if len(flag) < 1:
-            print("[zon error]: No flag provided for st command")
-            print("-- Usage: zon st <flag>")
-            sys.exit(1)
-        
-        if args[1] == "--path":
-            path = args[2:]
-            if len(path) < 1:
-                print("[zon error]: No path provided for st --path.")
-                print("-- Usage: zon st --path </path/to/your/scripts>")
-                sys.exit(1)
+        endkey = rest[1] if len(rest) > 1 else "EOF"
+        cmd_forge(path, endkey)
 
-            cmd_zon_set_path(path[0])
-            
-        elif args[1] == "--file":
-            path = args[2:]
-            if len(path) < 1:
-                print("[zon error]: No path or filename specified.")
-                print("-- Usage: zon st --file <path/to/folder/script.zon>")
-                sys.exit(1)
-            
-            keyend = args[3:]
-            if len(keyend) < 1:
-                cmd_zon_set_file([args[2], "EOF"], 0)
-            else:
-                cmd_zon_set_file(args[2:4], 0)
-            
-        elif args[1] == "--zbc":
-            path = args[2:]
-            if len(path) < 1:
-                print("[zon error]: No path or filename bytecode specified.")
-                print("-- Usage: zon st --zbc <path/to/folder/script.zon>")
-                sys.exit(1)
-            
-            keyend = args[3:]
-            if len(keyend) < 1:
-                cmd_zon_set_file([args[2], "EOF"], 4)
-            else:
-                cmd_zon_set_file(args[2:4], 4)
-        
-        else:
-            list_commands = ["--file", "--path", "--zbc"]
-            leven = levenshtein_zon.suggest_command(args[1], list_commands, 5)
-            if leven is None: leven = "Use zon help to see the available commands."
-            else: leven = leven = f"Did you mean?: {leven}"
-            
-            
-            print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
-            print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-            sys.exit(1)
-        
-    elif args[0] == "vw":
-        flag = args[1:]
-        if len(flag) < 1:
-            print("[zon error]: No flag provided for vw command")
-            print("-- Usage: zon vw <flag>")
-            sys.exit(1)
-        
-        match args[1]:
-            case "--path": cmd_zon_show_path()
-            case "--vers": cmd_zon_version()
-            case "--ast":
-                path = args[2:]
-                if len(path) < 1:
-                    print("[zon error]: No file specified for the ast command.")
-                    print("--Usage zon vw --ast <path>")
-                    sys.exit(1)
-                    
-                cmd_zon_run(path[0], "ast")
-                
-            case "--ast-o":
-                path = args[2:]
-                if len(path) < 1:
-                    print("[zon error]: No file specified for the ast command.")
-                    print("--Usage zon vw --ast-o <path>")
-                    sys.exit(1)
-                    
-                cmd_zon_run(path[0], "asto")
-                
-            case "--tokens":
-                path = args[2:]
-                if len(path) < 1:
-                    print("[zon error]: No file specified for the tokens command.")
-                    print("--Usage zon vw --ast <path>")
-                    sys.exit(1)
-                    
-                cmd_zon_run(path[0], "token")
-                
-            case "--zonasm":
-                path = args[2:]
-                if len(path) < 1:
-                    print("[zon error]: No file specified for the zonasm visual command")
-                    print("--Usage zon vw --zonasm <path>")
-                    sys.exit(1)
-                
-                disassemble_file(path[0])
-                
-            case _:
-                list_commands = ["--file", "--path", "--tokens", "--ast", "--vers", "--zonasm"]
-                leven = levenshtein_zon.suggest_command(args[1], list_commands, 5)
-                if leven is None: leven = "Use zon help to see the available commands."
-                else: leven = leven = f"Did you mean?: {leven}"
-                
-                
-                print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
-                print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-                sys.exit(1)
-                  
-    elif args[0] == "clr":
-        flag = args[1:]
-        if len(flag) < 1:
-            print("[zon error]: No flag provided for clr command")
-            print("-- Usage: zon clr <flag>")
-            sys.exit(1)
-        
-        if args[1] == "--path":
-            cmd_zon_clear_path()
-        else:
-            list_commands = ["--his", "--path"]
-            leven = levenshtein_zon.suggest_command(args[1], list_commands, 5)
-            if leven is None: leven = "Use zon help to see the available commands."
-            else: leven = leven = f"Did you mean?: {leven}"
-            
-            
-            print(f"[zon error]: Unknown flag '{args[1]}' for area '{args[0]}'.")
-            print(f"-- The forge doesn't recognize that instruction in this sector. {leven}")
-            sys.exit(1)
-            
-    elif args[0] == "repl":
-        if args[1] == "--in":
-            endkey = args[2:]
-            if len(endkey) < 1:
-                cmd_zon_set_file(["EOF"], mode=1)
-            else:
-                cmd_zon_set_file(args[2:3], 1)
-            
-        else:
-            endkey = args[2:]
-            if len(endkey) < 1:
-                cmd_zon_set_file([args[1], "EOF"], mode=3)
-            else:
-                cmd_zon_set_file(args[1:3], mode=3)
-                
+    elif flag == "--zbc":
+        # zon st --zbc <path.zbc> [endkey]
+        # reads source interactively then compiles directly to the .zbc path
+        path = _require_arg(rest, "--zbc", "zon st --zbc <path/to/output.zbc> [endkey]")
+        if path is None:
+            return
+        endkey = rest[1] if len(rest) > 1 else "EOF"
+
+        print(f"[zon info]: writing bytecode to '{path}'. Type '{endkey}' or EOF to compile.")
+        lines = read_lines(endkey)
+        if lines is None:
+            return
+        cmd_compile(source="\n".join(lines), output=path)
+
     else:
-        list_commands = []
-        for key in COMMANDS:
-            if key == "r|run":
-                list_commands.append("r")
-                list_commands.append("run")
-                continue
-            list_commands.append(key)
-        
-        leven = levenshtein_zon.suggest_command(args[0], list_commands, 5)
-        if leven is None: leven = "Use zon help to see the available commands."
-        else: leven = leven = f"Did you mean?: {leven}"
-            
-        print("[zon error]: Unknown command.")
-        print(f"-- The forge doesn't recognize that instruction. {leven}")
+        _unknown_flag("st", flag, ["--file", "--zbc"])
+
+
+def _handle_vw(args: list) -> None:
+    if not args:
+        print("[zon error]: No flag provided for vw.")
+        print("-- Usage: zon vw <flag>")
         sys.exit(1)
+
+    flag = args[0]
+    rest = args[1:]
+
+    match flag:
+        case "--vers":
+            print(VERSION)
+
+        case "--ast":
+            path = _require_arg(rest, "--ast", "zon vw --ast <file>.zon")
+            if path:
+                cmd_compile(path=path, cmd="ast")
+
+        case "--ast-o":
+            path = _require_arg(rest, "--ast-o", "zon vw --ast-o <file>.zon")
+            if path:
+                cmd_compile(path=path, cmd="asto")
+
+        case "--tokens":
+            path = _require_arg(rest, "--tokens", "zon vw --tokens <file>.zon")
+            if path:
+                cmd_compile(path=path, cmd="token")
+
+        case "--zonasm":
+            path = _require_arg(rest, "--zonasm", "zon vw --zonasm <file>.zbc")
+            if path:
+                disassemble(path)
+
+        case _:
+            _unknown_flag("vw", flag, ["--vers", "--ast", "--ast-o", "--tokens", "--zonasm"])
+
+
+def _handle_repl(args: list) -> None:
+    output_zbc     = args[0]
+    endkey = args[1] if len(args) > 1 else "EOF"
+    cmd_repl(endkey, output_zbc=output_zbc)
+
+
+# ------------------------------------------------------------------
+# Main dispatcher
+# ------------------------------------------------------------------
+
+_AREAS = {
+    "c":    _handle_compile,
+    "help": _handle_help,
+    "st":   _handle_st,
+    "vw":   _handle_vw,
+    "repl": _handle_repl,
+}
+
+
+def run_cli() -> None:
+    args = sys.argv[1:]
+
+    if not args:
+        print("[zon error]: No command or file specified.")
+        print("-- Use zon help to learn the commands and start building.")
+        sys.exit(1)
+
+    area    = args[0]
+    rest    = args[1:]
+    handler = _AREAS.get(area)
+
+    if handler is None:
+        print("[zon error]: Unknown command.")
+        print(f"-- {_leven_hint(area, list(_AREAS))}")
+        sys.exit(1)
+
+    handler(rest)

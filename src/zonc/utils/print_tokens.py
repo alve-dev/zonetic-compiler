@@ -1,63 +1,62 @@
-def print_tokens(tokens):
+"""Debug utility for printing a token stream as a formatted table."""
+
+_HEADER_INDEX  = "INDEX"
+_HEADER_TYPE   = "TYPE"
+_HEADER_LEXEME = "LEXEME"
+_HEADER_LINE   = "LINE"
+
+
+def print_tokens(tokens) -> None:
+    """Print the full token stream as an aligned four-column table."""
     if not tokens:
         print("[ ! ] No tokens to display.")
         return
 
-    h_idx, h_type, h_lex, h_line = "INDEX", "TYPE", "LEXEME", "LINE"
+    rows = _collect_rows(tokens)
+    _print_table(rows, index_width=len(str(len(tokens))))
 
-    w_idx = len(str(len(tokens)))
-    if len(h_idx) > w_idx: w_idx = len(h_idx)
-    
-    w_type = len(h_type)
-    w_lex = len(h_lex)
-    w_line = len(h_line)
 
-    for t in tokens:
-        t_type = str(t._type)
-        t._value = str(t._value).replace('\n', "\\n")
-        t_val = t._value
-        t_line = str(t._span.line_start)
-        
+# ------------------------------------------------------------------
+# Data collection
+# ------------------------------------------------------------------
 
-        if len(t_type) > w_type: w_type = len(t_type)
-        if len(t_val) > w_lex: w_lex = len(t_val)
-        if len(t_line) > w_line: w_line = len(t_line)
+def _collect_rows(tokens) -> list[tuple[str, str, str, str]]:
+    """Return (type, lexeme, line) tuples for each token."""
+    rows = []
+    for token in tokens:
+        kind   = str(token._type)
+        lexeme = str(token._value).replace('\n', r'\n')
+        line   = str(token._span.line_start)
+        rows.append((kind, lexeme, line))
+    return rows
 
-    def pad_right(text, width):
-        text = str(text)
-        while len(text) < width:
-            text = text + " "
-        return text
 
-    def pad_left_zeros(num, width):
-        s = str(num)
-        while len(s) < width:
-            s = "0" + s
-        return s
+# ------------------------------------------------------------------
+# Table rendering
+# ------------------------------------------------------------------
 
-    total_w = w_idx + w_type + w_lex + w_line + 9
-    separator = ""
-    while len(separator) < total_w: separator += "-"
+def _print_table(rows: list[tuple[str, str, str]], index_width: int) -> None:
+    col_idx    = max(index_width, len(_HEADER_INDEX))
+    col_type   = max(len(_HEADER_TYPE),   max((len(r[0]) for r in rows), default=0))
+    col_lexeme = max(len(_HEADER_LEXEME), max((len(r[1]) for r in rows), default=0))
+    col_line   = max(len(_HEADER_LINE),   max((len(r[2]) for r in rows), default=0))
+
+    separator = "-" * (col_idx + col_type + col_lexeme + col_line + 9)
+
+    def row_str(idx: str, kind: str, lexeme: str, line: str) -> str:
+        return (
+            idx.ljust(col_idx)       + " | " +
+            kind.ljust(col_type)     + " | " +
+            lexeme.ljust(col_lexeme) + " | " +
+            line.ljust(col_line)
+        )
 
     print("\n[ TOKEN STREAM ]")
     print(separator)
-    
-    header = pad_right(h_idx, w_idx) + " | " + \
-             pad_right(h_type, w_type) + " | " + \
-             pad_right(h_lex, w_lex) + " | " + \
-             pad_right(h_line, w_line)
-    print(header)
+    print(row_str(_HEADER_INDEX, _HEADER_TYPE, _HEADER_LEXEME, _HEADER_LINE))
     print(separator)
 
-    count = 1
-    for t in tokens:
-        line_num = str(t._span.line_start)
+    for i, (kind, lexeme, line) in enumerate(rows, start=1):
+        print(row_str(str(i).zfill(col_idx), kind, lexeme, line))
 
-        row = pad_left_zeros(count, w_idx) + " | " + \
-              pad_right(t._type, w_type) + " | " + \
-              pad_right(t._value, w_lex) + " | " + \
-              pad_right(line_num, w_line)
-        print(row)
-        count += 1
-    
     print(separator + "\n")

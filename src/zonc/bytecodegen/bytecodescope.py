@@ -1,82 +1,126 @@
+"""Symbol table and register types for the bytecode emitter.
+
+During code generation each variable is either assigned a physical
+s-register (callee-saved, lives for the function's lifetime) or spilled
+to a known stack offset. ZonVar holds whichever of those two applies.
+
+The SymbolTable mirrors the lexical scope stack so that name resolution
+always finds the innermost binding first.
+"""
+
 from dataclasses import dataclass
 from enum import Enum
 from zonc.zonast import ZonType
 
+
 class RegT(Enum):
-    F = 0
-    X = 1
-    
+    """Register file selector."""
+    F = 0  # float register file
+    X = 1  # integer register file
+
+
 @dataclass
 class ZonVar:
-    reg: int | None
-    regt: RegT | None
-    zontype: ZonType
-    offset_stack: int | None = None
-    is_global: bool = False
+    """Represents a variable's location during code generation.
+
+    If reg is not None the variable lives in a physical register.
+    If reg is None it has been spilled and offset_stack holds the
+    fp-relative byte offset where it lives.
+
+    Global variables use offset_global instead (gp-relative).
+    """
+    reg:           int | None
+    regt:          RegT | None
+    zontype:       ZonType
+    offset_stack:  int | None = None
+    is_global:     bool = False
     offset_global: int | None = None
 
+
+# ------------------------------------------------------------------
+# Symbol table
+# ------------------------------------------------------------------
+
+# s-registers available for variable allocation (callee-saved).
+_SAVED_X = [9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+_SAVED_F = [8, 9,  18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+
+
 class SymbolTable:
-    def __init__(self):
-        self.scopes: list[dict[str, ZonVar]] = [{}]
-        self.saved = [9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
-        self.fsaved = [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    """Lexically scoped symbol table for the bytecode emitter.
 
-    def enter_scope(self):
-        self.scopes.append({})
+    Each scope is a dict mapping name -> ZonVar. Scopes are pushed on
+    function/block entry and popped on exit.
+    """
 
-    def exit_scope(self):
-        self.scopes.pop()
+    def __init__(self) -> None:
+        self._scopes: list[dict[str, ZonVar]] = [{}]
 
-    def define_global(self, name, offset_global, zontype):
-        self.scopes[-1].update({name : ZonVar(reg=None, regt=None, zontype=zontype, is_global=True, offset_global=offset_global)})
-    
-    def define(self, name, zontype):
-        used_registers = set()
-        for scope in self.scopes:
-            for var in scope.values():
-                if var.regt == RegT.X:
-                    used_registers.add(var.reg)
+    # ------------------------------------------------------------------
+    # Scope management
+    # ------------------------------------------------------------------
 
-        for r in self.saved:
-            if r not in used_registers:
-                self.scopes[-1][name] = ZonVar(r, RegT.X, zontype)
-                return ZonVar(r, RegT.X, zontype)
-                
+    def enter_scope(self) -> None:
+        self._scopes.append({})
+
+    def exit_scope(self) -> None:
+        self._scopes.pop()
+
+    # ------------------------------------------------------------------
+    # Definition
+    # ------------------------------------------------------------------
+
+    def define_global(self, name: str, offset_global: int, zontype: ZonType) -> None:
+        """Register a global variable at a fixed gp-relative offset."""
+        self._scopes[-1][name] = ZonVar(
+            reg=None, regt=None, zontype=zontype,
+            is_global=True, offset_global=offset_global,
+        )
+
+    def define(self, name: str, zontype: ZonType) -> ZonVar | None:
+        """Assign the next free integer s-register to name.
+        Returns the ZonVar on success, None if all s-registers are taken.
+        """
+        used = {var.reg for scope in self._scopes for var in scope.values() if var.regt == RegT.X}
+        for r in _SAVED_X:
+            if r not in used:
+                var = ZonVar(r, RegT.X, zontype)
+                self._scopes[-1][name] = var
+                return var
         return None
-    
-    def define_f(self, name, zontype):
-        used_registers = set()
-        for scope in self.scopes:
-            for var in scope.values():
-                if var.regt == RegT.F:
-                    used_registers.add(var.reg)
 
-        for r in self.fsaved:
-            if r not in used_registers:
-                self.scopes[-1][name] = ZonVar(r, RegT.F, zontype)
+    def define_f(self, name: str, zontype: ZonType) -> int | None:
+        """Assign the next free float s-register to name.
+        Returns the physical register number on success, None if all are taken.
+        """
+        used = {var.reg for scope in self._scopes for var in scope.values() if var.regt == RegT.F}
+        for r in _SAVED_F:
+            if r not in used:
+                self._scopes[-1][name] = ZonVar(r, RegT.F, zontype)
                 return r
-                
         return None
-        
-    def resolve(self, name):
-        for scope in reversed(self.scopes):
+
+    # ------------------------------------------------------------------
+    # Lookup and removal
+    # ------------------------------------------------------------------
+
+    def resolve(self, name: str) -> ZonVar | None:
+        """Find the innermost binding for name, or None."""
+        for scope in reversed(self._scopes):
             if name in scope:
-                return scope.get(name)
-    
-    def delete_symbol(self, name):
-        for scope in reversed(self.scopes):
+                return scope[name]
+        return None
+
+    def delete_symbol(self, name: str) -> None:
+        """Remove name from the innermost scope that defines it."""
+        for scope in reversed(self._scopes):
             if name in scope:
                 del scope[name]
-                break
-            
-    def exists(self, name):
-        for scope in reversed(self.scopes):
-            if name in scope:
-                return True
-                
-        return False
-    
-    def exists_here(self, name):
-        if name in self.scopes[-1]:
-            return True
-        return False
+                return
+
+    def exists(self, name: str) -> bool:
+        return any(name in scope for scope in self._scopes)
+
+    def exists_here(self, name: str) -> bool:
+        """Return True only if name is defined in the current scope."""
+        return name in self._scopes[-1]

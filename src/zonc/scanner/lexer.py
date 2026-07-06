@@ -1,944 +1,612 @@
 from .token import Token
 from .tokentype import TokenType
-from zonc.zonc_errors import DiagnosticEngine
+from zonc.zonc_errors import DiagnosticEngine, ErrorCode
 from .list_tokens import ListTokens
-from zonc.location_file import Span
-from zonc.zonc_errors import ErrorCode
-from zonc.location_file import FileMap
+from zonc.location_file import Span, FileMap
 
-class Lexer: 
-    def __init__(self, code: str, tokens: ListTokens, diagnostic: DiagnosticEngine, file_map: FileMap, keywords: dict) -> None:
-        self._code = code
-        self._code_len = len(self._code)
-        self._position = 0
+
+class Lexer:
+    def __init__(
+        self,
+        source: str,
+        tokens: ListTokens,
+        diagnostic: DiagnosticEngine,
+        file_map: FileMap,
+        keywords: dict,
+    ) -> None:
+        self._source = source
+        self._source_len = len(source)
+        self._pos = 0
         self._diagnostic = diagnostic
         self._tokens = tokens
         self._file_map = file_map
-        self.keywords = keywords
-        
-        
-    def _generic_span(self, step: int) -> Span:
-        return Span(self._position, self._position + step, self._file_map)
-    
-    
-    def _advance(self, step: int):
-        if self._position + step > self._code_len:
-            self._position = self._code_len
-            return
-        
-        self._position += step
-    
-    
-    def _peek(self, step: int) -> str:
-        """peek(0) == actual character
-        \npeek(n) == character n times ahead
-        \npeek(-n) == character n times back"""
-        
-        
-        if self._position + step >= self._code_len or self._position + step < 0:
+        self._keywords = keywords
+
+    # ------------------------------------------------------------------
+    # Core primitives
+    # ------------------------------------------------------------------
+
+    def _peek(self, offset: int) -> str:
+        """Return the character at pos+offset without consuming it.
+        Returns '\\0' if out of bounds."""
+        index = self._pos + offset
+        if index < 0 or index >= self._source_len:
             return '\0'
-        
-        return self._code[self._position + step]
-    
-    
+        return self._source[index]
+
+    def _advance(self, step: int = 1) -> None:
+        self._pos = min(self._pos + step, self._source_len)
+
     def _is_end(self) -> bool:
-        return self._position == self._code_len
-    
-    
-    def _match_next(self, expected: str, true_type, true_lexeme, false_type, false_lexeme):
-        if self._peek(1) == expected:
-            self._tokens._add(
-                Token(
-                    true_type,
-                    true_lexeme,
-                    self._generic_span(len(true_lexeme))
-                )
-            )
-            self._advance(len(true_lexeme))
-        
+        return self._pos >= self._source_len
+
+    def _span(self, length: int) -> Span:
+        return Span(self._pos, self._pos + length, self._file_map)
+
+    def _span_from(self, start: int) -> Span:
+        return Span(start, self._pos, self._file_map)
+
+    def _add_token(self, kind: TokenType, lexeme: str) -> None:
+        self._tokens._add(Token(kind, lexeme, self._span(len(lexeme))))
+        self._advance(len(lexeme))
+
+    # ------------------------------------------------------------------
+    # Operator scanning helpers
+    # ------------------------------------------------------------------
+
+    def _scan_compound(self, base_kind, base_lexeme, assign_kind, assign_lexeme) -> None:
+        """Emit base_kind or assign_kind depending on whether '=' follows."""
+        if self._peek(1) == '=':
+            self._add_token(assign_kind, assign_lexeme)
         else:
-            self._tokens._add(
-                Token(
-                    false_type,
-                    false_lexeme,
-                    self._generic_span(len(false_lexeme))
-                )
+            self._add_token(base_kind, base_lexeme)
+
+    # ------------------------------------------------------------------
+    # Operator scanners
+    # ------------------------------------------------------------------
+
+    def _scan_plus(self) -> None:
+        if self._peek(1) == '+':
+            self._add_token(TokenType.OPERATOR_CONCAT, '++')
+        else:
+            self._scan_compound(
+                TokenType.OPERATOR_PLUS,        '+',
+                TokenType.OPERATOR_PLUS_ASSIGN, '+=',
             )
-            self._advance(len(false_lexeme))
-    
-    
-    def _scan_plus(self):
+
+    def _scan_minus(self) -> None:
         match self._peek(1):
-            case '+':
-                self._tokens._add(
-                    Token(
-                        TokenType.OPERATOR_CONCAT,
-                        '++',
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-
-            case _:
-                self._match_next(
-                    '=',
-                    # Compound Addition Operator
-                    TokenType.OPERATOR_PLUS_ASSIGN,
-                    "+=",
-                    
-                    # Addition Operator
-                    TokenType.OPERATOR_PLUS,
-                    '+'
-                )
-
-
-    def _scan_minus(self):
-        match self._peek(1):
-            # Multi-Line Comment
             case '|':
-                self._advance(2)
-                success = False
-                start_position = self._position
-                count = 1
-
-                while not self._is_end():
-                    match self._peek(0):
-                        case '|':
-                            match self._peek(1):
-                                case '-':
-                                    self._advance(2)
-                                    count -= 1
-                                    if count == 0:
-                                        success = True
-                                        break
-                                
-                                case _:
-                                    self._advance(2)
-                                    
-                        case '-':
-                            match self._peek(1):
-                                case '|':
-                                    self._advance(2)
-                                    count += 1
-                                    
-                                case _:
-                                    self._advance(1)
-                                    
-                        case _:
-                            self._advance(1)
-                            
-                if not success:
-                    self._diagnostic.emit(
-                        ErrorCode.E0002,
-                        None,
-                        [Span(start_position, self._position-1, self._file_map)],
-                        [(Span(self._position-1, self._position, self._file_map), "|-` was expected here to close the comment")]
-                    )
-            
+                self._scan_block_comment()
             case '>':
-                self._tokens._add(
-                    Token(
-                        TokenType.ARROW,
-                        "->",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-                
+                self._add_token(TokenType.ARROW, '->')
             case '/':
-                while not self._is_end() and not self._peek(0) == '\n':
-                    self._advance(1)
-            
+                self._scan_line_comment()
             case _:
-                self._match_next(
-                    '=',
-                    # Compound Subtraction Operator
-                    TokenType.OPERATOR_MINUS_ASSIGN,
-                    "-=",
-                    
-                    # Subtraction Operator
-                    TokenType.OPERATOR_MINUS,
-                    '-'
-                )
-            
-
-    def _scan_star(self):
-        match self._peek(1):
-            
-            # Possible Exponentiation Operator
-            case '*':
-                self._advance(1)
-                self._match_next(
-                    '=',
-                    # Compound Exponentiation Operator
-                    TokenType.OPERATOR_POW_ASSIGN,
-                    "**=",
-                    
-                    # Exponentiation Operator
-                    TokenType.OPERATOR_POW,
-                    "**"
-                )
-                
-            # Compound Multiplication Operator
-            case _:
-                self._match_next(
-                    '=',
-                    # Compound Multiplication Operator
-                    TokenType.OPERATOR_MULT_ASSIGN,
-                    "*=",
-                    
-                    # Multiplication Operator
-                    TokenType.OPERATOR_MULT,
-                    '*'
-                )
-    
-    
-    def _scan_slash(self):
-        self._match_next(
-            '=',
-            # Compound Floating Division Operator
-            TokenType.OPERATOR_DIV_ASSIGN,
-            "/=",
-            
-            # Floating Division Operator
-            TokenType.OPERATOR_DIV,
-            '/'
-        )
-
-
-    def _scan_percentage(self):
-        self._match_next(
-            '=',
-            
-            # Compound Mod Operator
-            TokenType.OPERATOR_MOD_ASSIGN,
-            "%=",
-            
-            # Mod Operator
-            TokenType.OPERATOR_MOD,
-            '%'
-        )
-    
-    
-    def _scan_equal(self):
-        match self._peek(1):
-            case '=':
-                self._advance(1)
-                self._match_next(
-                    '=',
-                    # Equal String Operator
-                    TokenType.OPERATOR_EQUAL_STR,
-                    "===",
-                    
-                    # Equal Operator
-                    TokenType.OPERATOR_EQUAL,
-                    '==',
-                )
-            
-            case _:
-                self._tokens._add(
-                    Token(
-                        TokenType.OPERATOR_ASSIGN,
-                        '=',
-                        self._generic_span(1)
-                    )
-                )
-                self._advance(1)
-    
-    
-    def _scan_less(self):
-        match self._peek(1):
-            # Left Shift Operator
-            case '<':
-                self._tokens._add(
-                    Token(
-                        TokenType.OPERATOR_SHIFT_LEFT,
-                        "<<",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-            
-            case _:
-                self._match_next(
-                    '=',
-                    # Less Or Equal Than Operator
-                    TokenType.OPERATOR_LESS_EQUAL,
-                    "<=",
-                    
-                    # Less Than Operator
-                    TokenType.OPERATOR_LESS,
-                    '<'
-                )
-        
-        
-    def _scan_greater(self):
-        match self._peek(1):
-            # Right Shift Operator
-            case '>':
-                self._tokens._add(
-                    Token(
-                        TokenType.OPERATOR_SHIFT_RIGHT,
-                        ">>",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-            
-            case _:
-                self._match_next(
-                    '=',
-                    # Greater Or Equal Than Operator
-                    TokenType.OPERATOR_GREATER_EQUAL,
-                    ">=",
-                    
-                    # Greater Than Operator
-                    TokenType.OPERATOR_GREATER,
-                    '>'
+                self._scan_compound(
+                    TokenType.OPERATOR_MINUS,        '-',
+                    TokenType.OPERATOR_MINUS_ASSIGN, '-=',
                 )
 
-
-    def _scan_bang(self):
-        match self._peek(1):
-            # TODO: COMMING SOON -> FACTORIAL OPERATOR
-            #case '!':
-            #   pass
-            
-            case '=':
-                self._advance(1)
-                self._match_next(
-                    '=',
-                    # Not Equal Than Operator
-                    TokenType.OPERATOR_NOT_EQUAL_STR,
-                    "!==",
-                    
-                    # Alt NOT Boolwise Operator
-                    TokenType.OPERATOR_NOT_EQUAL,
-                    '!='
-                )
-            
-            case _:
-                self._tokens._add(
-                    Token(
-                        TokenType.GATE_NOT,
-                        '!',
-                        self._generic_span(1)
-                    )
-                )
-                self._advance(1)
-                
-                     
-    def _scan_ampersand(self):
-        
-        match self._peek(1):
-            # Alternative AND Bool-Wise Operator
-            case '&':
-                self._advance(1)
-                self._match_next(
-                    '=',
-                    TokenType.OPERATOR_AND_ASSIGN,
-                    "&&=",
-                    
-                    TokenType.GATE_AND,
-                    '&'
-                )
-            
-            #AND Bit-Wise Operator
-            case _:
-                self._match_next(
-                    '=',
-                    TokenType.OPERATOR_BAND_ASSIGN,
-                    '&=',
-                    
-                    TokenType.BIT_AND,
-                    '&'
-                )
-    
-    
-    def _scan_pipe(self):
-        match self._peek(1):
-            # Alternative OR Bool-Wise Operator
-            case '|':
-                self._advance(1)
-                self._match_next(
-                    '=',
-                    TokenType.OPERATOR_OR_ASSIGN,
-                    "||=",
-                    
-                    TokenType.GATE_OR,
-                    '||'
-                )
-            
-            # OR Bit-Wise Operator
-            case _:
-                self._match_next(
-                    '=',
-                    TokenType.OPERATOR_BOR_ASSIGN,
-                    '|=',
-                    
-                    TokenType.BIT_OR,
-                    '|'
-                )
-    
-    def _scan_tild(self):
-        match self._peek(1):
-            case '&':
-                self._tokens._add(
-                    Token(
-                        TokenType.BIT_NAND,
-                        "~&",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-            
-            case '|':
-                self._tokens._add(
-                    Token(
-                        TokenType.BIT_NOR,
-                        "~|",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-            
-            case '^':
-                self._tokens._add(
-                    Token(
-                        TokenType.BIT_XNOR,
-                        "~^",
-                        self._generic_span(2)
-                    )
-                )
-                self._advance(2)
-            
-            case _:
-                self._tokens._add(
-                    Token(
-                        TokenType.BIT_NOT,
-                        "~",
-                        self._generic_span(1)
-                    )
-                )
-                self._advance(1)
-    
-    
-    def _scan_other(self, char: str):
-        # Identifier or Keyword
-        if char == '_' or char.isalpha():
-            self._scan_identifier_or_keyword()
-        
-        # Literal String
-        elif char == '"' or char == "'":
-            self._scan_literal_string()
-        
-        # Literal Number
-        elif char.isdigit():
-            self._scan_literal_number()
-        
-        # ERROR DE CHARACTER NO SOPORTADO
-        else:
-            span = self._generic_span(1)
-            
-            self._diagnostic.emit(
-                ErrorCode.E0001,
-                {"char": char},
-                [span],
-                [(span, "this character is not recognized by Zonetic")]
+    def _scan_star(self) -> None:
+        if self._peek(1) == '*':
+            # advance past first '*' so _scan_compound sees the second
+            self._advance(1)
+            self._scan_compound(
+                TokenType.OPERATOR_POW,        '**',
+                TokenType.OPERATOR_POW_ASSIGN, '**=',
             )
-            self._advance(1)
-    
-        
-    def _scan_literal_number(self) -> None:
-        start_position = self._position
-        numero_completo = [self._peek(0)]
-        self._advance(1)
-        is_float = False
-        is_error = False
-        digit_sequence = 1
-        is_separate = False
-        
-        while not self._is_end():
-            char = self._peek(0)
-            
-            if char.isdigit():
-                if is_separate and digit_sequence >= 3:
-                    while self._peek(0).isdigit() or self._peek(0) == '_':
-                        self._advance(1)
-                            
-                    span_error = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(
-                        ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
-                        [(span_error, "`_` is not separating thousands here")]
-                    )
-                    is_error = True
-                    break
-                
-                digit_sequence += 1
-                numero_completo.append(char)
-                self._advance(1)
-            
-            elif char == '.' and self._peek(1).isdigit():
-                if is_separate and digit_sequence != 3:
-                    while self._peek(0).isdigit() or self._peek(0) == '.' or self._peek(0) == '_':
-                        self._advance(1)
-                    span_error = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(
-                        ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
-                        [(span_error, "`_` is not separating thousands here")]
-                    )
-                    is_error = True
-                    break
+        else:
+            self._scan_compound(
+                TokenType.OPERATOR_MULT,        '*',
+                TokenType.OPERATOR_MULT_ASSIGN, '*=',
+            )
 
-                if is_float:
-                    self._advance(1)
-                    while (self._peek(0).isdigit() or self._peek(0) == '.') and not(self._is_end()):
-                        self._advance(1)
-                    span = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(ErrorCode.E0005, None, [span], [(span, "this number has too many decimal points")])
-                    is_error = True
-                    break
-                else:
-                    is_float = True
-                    is_separate = False
-                    digit_sequence = 0
-                
-                numero_completo.append(char)
-                self._advance(1)
-            
-            elif char == '_':
-                if is_float:
-                    while self._peek(0).isdigit() or self._peek(0) == '_':
-                        self._advance(1)
-                    span_error = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(ErrorCode.E0008, None, [span_error], [(span_error, "`_` found in decimal part")])
-                    is_error = True
-                    break
-                
-                if is_separate and digit_sequence < 3:
-                    while self._peek(0).isdigit() or self._peek(0) == '_':
-                        self._advance(1)
-                    span_error = Span(start_position, self._position, self._file_map)
-                    self._diagnostic.emit(ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error], [(span_error, "`_` is not separating thousands here")])
-                    is_error = True
-                    break
-                
-                is_separate = True
-                digit_sequence = 0
-                self._advance(1)
-                
-            elif char in ['e', 'E']:
-                is_float = True
-                minimun_num = False
-                numero_completo.append('e')
-                self._advance(1)
-                char = self._peek(0)
-                if  char in ['+', '-']:
-                    numero_completo.append(char)
-                    self._advance(1)
-                    
-                while not self._is_end():
-                    char = self._peek(0)
-                    if char.isdigit():
-                        numero_completo.append(self._peek(0))
-                        self._advance(1)
-                        minimun_num = True
-                        
-                    elif char == '.':
-                        while not self._is_end() and self._peek(0).isalnum() or self._peek(0) in ['.']:
-                            self._advance(1)
-                        
-                        span_err = Span(start_position, self._position, self._file_map)
-                        self._diagnostic.emit(
-                            ErrorCode.E0011, None, [span_err], [(span_err, "exponents cannot have decimal points")]
-                        )
-                        is_error = True
-                        break
-                        
-                    elif char.isalpha() or char == '_':
-                        while not self._is_end() and self._peek(0).isalnum() or self._peek(0) == ['.', '_']:
-                            self._advance(1)
-                        
-                        span_err = Span(start_position, self._position, self._file_map)
-                        self._diagnostic.emit(
-                            ErrorCode.E0012, None, [span_err], [(span_err, "only digits are allowed here")]
-                        )
-                        is_error = True
-                        break
-                    
-                    else:
-                        if not minimun_num:
-                            is_error = True
-                            span_err = Span(self._position-1, self._position, self._file_map)
-                            self._diagnostic.emit(
-                                ErrorCode.E0010, None, [span_err], [(span_err, "After this point, only digits are allowed.")]
-                            )
-                        break
-                
-                break
-                      
-            elif char.isalpha():
-                self._advance(1)
-                while not self._is_end() and self._peek(0).isalnum() or char == '_':
-                    self._advance(1)
-                token = self._code[start_position : self._position]
-                span = Span(start_position, self._position, self._file_map)
-                self._diagnostic.emit(ErrorCode.E0006, { "token" : token}, [span], [(span, f"`{token}` starts with a digit")])
-                is_error = True
-                break
-            
+    def _scan_slash(self) -> None:
+        self._scan_compound(
+            TokenType.OPERATOR_DIV,        '/',
+            TokenType.OPERATOR_DIV_ASSIGN, '/=',
+        )
+
+    def _scan_percent(self) -> None:
+        self._scan_compound(
+            TokenType.OPERATOR_MOD,        '%',
+            TokenType.OPERATOR_MOD_ASSIGN, '%=',
+        )
+
+    def _scan_equal(self) -> None:
+        if self._peek(1) == '=':
+            self._advance(1)
+            self._scan_compound(
+                TokenType.OPERATOR_EQUAL,     '==',
+                TokenType.OPERATOR_EQUAL_STR, '===',
+            )
+        else:
+            self._add_token(TokenType.OPERATOR_ASSIGN, '=')
+
+    def _scan_less(self) -> None:
+        if self._peek(1) == '<':
+            self._add_token(TokenType.OPERATOR_SHIFT_LEFT, '<<')
+        else:
+            self._scan_compound(
+                TokenType.OPERATOR_LESS,       '<',
+                TokenType.OPERATOR_LESS_EQUAL, '<=',
+            )
+
+    def _scan_greater(self) -> None:
+        if self._peek(1) == '>':
+            self._add_token(TokenType.OPERATOR_SHIFT_RIGHT, '>>')
+        else:
+            self._scan_compound(
+                TokenType.OPERATOR_GREATER,       '>',
+                TokenType.OPERATOR_GREATER_EQUAL, '>=',
+            )
+
+    def _scan_bang(self) -> None:
+        if self._peek(1) == '=':
+            self._advance(1)
+            self._scan_compound(
+                TokenType.OPERATOR_NOT_EQUAL,     '!=',
+                TokenType.OPERATOR_NOT_EQUAL_STR, '!==',
+            )
+        else:
+            self._add_token(TokenType.GATE_NOT, '!')
+
+    def _scan_ampersand(self) -> None:
+        if self._peek(1) == '&':
+            self._advance(1)
+            self._scan_compound(
+                TokenType.GATE_AND,              '&&',
+                TokenType.OPERATOR_AND_ASSIGN,   '&&=',
+            )
+        else:
+            self._scan_compound(
+                TokenType.BIT_AND,               '&',
+                TokenType.OPERATOR_BAND_ASSIGN,  '&=',
+            )
+
+    def _scan_pipe(self) -> None:
+        if self._peek(1) == '|':
+            self._advance(1)
+            self._scan_compound(
+                TokenType.GATE_OR,             '||',
+                TokenType.OPERATOR_OR_ASSIGN,  '||=',
+            )
+        else:
+            self._scan_compound(
+                TokenType.BIT_OR,              '|',
+                TokenType.OPERATOR_BOR_ASSIGN, '|=',
+            )
+
+    def _scan_tilde(self) -> None:
+        match self._peek(1):
+            case '&':
+                self._add_token(TokenType.BIT_NAND, '~&')
+            case '|':
+                self._add_token(TokenType.BIT_NOR, '~|')
+            case '^':
+                self._add_token(TokenType.BIT_XNOR, '~^')
+            case _:
+                self._add_token(TokenType.BIT_NOT, '~')
+
+    # ------------------------------------------------------------------
+    # Comment scanners
+    # ------------------------------------------------------------------
+
+    def _scan_line_comment(self) -> None:
+        while not self._is_end() and self._peek(0) != '\n':
+            self._advance(1)
+
+    def _scan_block_comment(self) -> None:
+        """Nested block comment: -| ... |- (supports nesting)."""
+        self._advance(2)  # skip '-|'
+        start = self._pos
+        depth = 1
+
+        while not self._is_end():
+            if self._peek(0) == '|' and self._peek(1) == '-':
+                self._advance(2)
+                depth -= 1
+                if depth == 0:
+                    return
+            elif self._peek(0) == '-' and self._peek(1) == '|':
+                self._advance(2)
+                depth += 1
             else:
-                break
-            
-        if not is_error and is_separate and not is_float:
-            if digit_sequence != 3:
-                span_error = Span(start_position, self._position, self._file_map)
-                self._diagnostic.emit(
-                    ErrorCode.E0007, { "number" : span_error.to_string() }, [span_error],
-                    [(span_error, "`_` is not separating thousands here")]
-                )
-                is_error = True
-            
-        if is_error: return
-        
-        numero = "".join(numero_completo)
-        val = float(numero) if is_float else int(numero)
-        self._tokens._add(Token(TokenType.LITERAL_NUMBER, val, Span(start_position, self._position, self._file_map)))
+                self._advance(1)
 
-                             
-    def _scan_identifier_or_keyword(self) -> None:
-        start_position = self._position
-        self._advance(1)
-                                
-        while not self._is_end():
-            char = self._peek(0)
-            if not (char.isalnum() or char == '_'):
-                break
-            
+        # reached EOF without closing the comment
+        self._diagnostic.emit(
+            ErrorCode.E0002,
+            None,
+            [Span(start, self._pos - 1, self._file_map)],
+            [(Span(self._pos - 1, self._pos, self._file_map),
+              "'|-' was expected here to close the comment")],
+        )
+
+    # ------------------------------------------------------------------
+    # Number scanning
+    # ------------------------------------------------------------------
+
+    def _scan_number(self) -> None:
+        """Scan an integer or float literal, with optional '_' thousand separators
+        and scientific notation (e/E).
+
+        Valid forms:
+            42          plain integer
+            1_000_000   integer with thousand separators
+            3.14        float
+            1.5e10      scientific notation
+            1.5e+2      scientific with sign
+            1.5e-2      scientific with sign
+        """
+        start = self._pos
+        digits = []
+
+        # --- collect integer part ---
+        while not self._is_end() and (self._peek(0).isdigit() or self._peek(0) == '_'):
+            digits.append(self._peek(0))
             self._advance(1)
-            
-        ident = self._code[start_position : self._position]
-        
-        if ident == "_":
-            span_err = Span(start_position, self._position, self._file_map)
+
+        is_float = False
+
+        # --- collect decimal part ---
+        if self._peek(0) == '.' and self._peek(1).isdigit():
+            is_float = True
+            digits.append('.')
+            self._advance(1)
+
+            while not self._is_end() and self._peek(0).isdigit():
+                digits.append(self._peek(0))
+                self._advance(1)
+
+            # second dot is an error
+            if self._peek(0) == '.' and self._peek(1).isdigit():
+                while not self._is_end() and (self._peek(0).isdigit() or self._peek(0) == '.'):
+                    self._advance(1)
+                span = self._span_from(start)
+                self._diagnostic.emit(
+                    ErrorCode.E0005, None, [span],
+                    [(span, "this number has too many decimal points")],
+                )
+                return
+
+        # --- collect exponent part ---
+        if self._peek(0) in ('e', 'E'):
+            is_float = True
+            digits.append('e')
+            self._advance(1)
+
+            if self._peek(0) in ('+', '-'):
+                digits.append(self._peek(0))
+                self._advance(1)
+
+            if not self._peek(0).isdigit():
+                span = Span(self._pos - 1, self._pos, self._file_map)
+                self._diagnostic.emit(
+                    ErrorCode.E0010, None, [span],
+                    [(span, "after this point, only digits are allowed")],
+                )
+                return
+
+            while not self._is_end() and self._peek(0).isdigit():
+                digits.append(self._peek(0))
+                self._advance(1)
+
+            if self._peek(0) == '.':
+                while not self._is_end() and (self._peek(0).isalnum() or self._peek(0) == '.'):
+                    self._advance(1)
+                span = self._span_from(start)
+                self._diagnostic.emit(
+                    ErrorCode.E0011, None, [span],
+                    [(span, "exponents cannot have decimal points")],
+                )
+                return
+
+        # --- letter right after a number is always an error ---
+        if self._peek(0).isalpha():
+            while not self._is_end() and self._peek(0).isalnum():
+                self._advance(1)
+            token_text = self._source[start:self._pos]
+            span = self._span_from(start)
             self._diagnostic.emit(
-                ErrorCode.E0009, None, [span_err], [(span_err, "identifiers must contain at least one letter or digit")]
+                ErrorCode.E0006, {"token": token_text}, [span],
+                [(span, f"'{token_text}' starts with a digit")],
             )
             return
-        
-        if ident in self.keywords:
-            self._tokens._add(
-                Token(
-                    self.keywords[ident],
-                    ident,
-                    Span(start_position, self._position, self._file_map)
-                    )
-                )
-        else:
-            self._tokens._add(
-                Token(
-                    TokenType.LITERAL_IDENT, 
-                    ident,
-                    Span(start_position, self._position, self._file_map)
-                    )
-                )
 
+        # --- validate thousand separators ---
+        raw = "".join(digits)
+        if '_' in raw:
+            error = self._validate_separators(raw, start, is_float)
+            if error:
+                return
 
-    def _scan_literal_string(self) -> None:
-        start_quotes = self._peek(0)
-        start_position = self._position
+        # --- emit token ---
+        clean = raw.replace('_', '')
+        value = float(clean) if is_float else int(clean)
+        self._tokens._add(
+            Token(TokenType.LITERAL_NUMBER, value, self._span_from(start))
+        )
+
+    def _validate_separators(self, raw: str, start: int, is_float: bool) -> bool:
+        """Validate '_' thousand separators. Returns True if there is an error."""
+        span = self._span_from(start)
+
+        # no separators allowed in float or exponent parts
+        if is_float:
+            self._diagnostic.emit(
+                ErrorCode.E0008, None, [span],
+                [(span, "'_' separators are not allowed in float literals")],
+            )
+            return True
+
+        # must be exactly groups of 3 digits after the first group
+        # e.g. 1_000, 1_000_000 are valid; 1_00, 1_0000 are not
+        parts = raw.split('_')
+
+        # first group can be 1-3 digits, rest must be exactly 3
+        if not all(p.isdigit() for p in parts):
+            self._diagnostic.emit(
+                ErrorCode.E0007, {"number": raw}, [span],
+                [(span, "consecutive or leading/trailing '_' are not allowed")],
+            )
+            return True
+
+        if len(parts[0]) == 0 or len(parts[0]) > 3:
+            self._diagnostic.emit(
+                ErrorCode.E0007, {"number": raw}, [span],
+                [(span, "'_' is not separating thousands correctly")],
+            )
+            return True
+
+        if any(len(p) != 3 for p in parts[1:]):
+            self._diagnostic.emit(
+                ErrorCode.E0007, {"number": raw}, [span],
+                [(span, "'_' is not separating thousands correctly")],
+            )
+            return True
+
+        return False
+
+    # ------------------------------------------------------------------
+    # Identifier / keyword scanning
+    # ------------------------------------------------------------------
+
+    def _scan_identifier_or_keyword(self) -> None:
+        start = self._pos
         self._advance(1)
-        success: bool = False
+
+        while not self._is_end() and (self._peek(0).isalnum() or self._peek(0) == '_'):
+            self._advance(1)
+
+        ident = self._source[start:self._pos]
+
+        if ident == '_':
+            span = self._span_from(start)
+            self._diagnostic.emit(
+                ErrorCode.E0009, None, [span],
+                [(span, "identifiers must contain at least one letter or digit")],
+            )
+            return
+
+        kind = self._keywords.get(ident, TokenType.LITERAL_IDENT)
+        self._tokens._add(Token(kind, ident, self._span_from(start)))
+
+    # ------------------------------------------------------------------
+    # String scanning
+    # ------------------------------------------------------------------
+
+    def _scan_string(self) -> None:
+        opening_quote = self._peek(0)
+        start = self._pos
+        self._advance(1)
         chars = []
-        
+        closed = False
+
         while not self._is_end():
             char = self._peek(0)
-            match char:
-                # Escapes
-                case '\\':
-                    match self._peek(1):
-                        # Escape Newline
-                        case 'n':
-                            chars.append('\n')
-                            self._advance(2)
-                            
-                        # Escape Tab
-                        case 't':
-                            chars.append('\t')
-                            self._advance(2)
-                            
-                        # Escape `\`
-                        case '\\':
-                            chars.append('\\')
-                            self._advance(2)
-                            
-                        # Escape `'`
-                        case "'":
-                            chars.append("'")
-                            
-                            # Warning de codigo basura al escapar una comilla que no necesita ser escapada
-                            if start_quotes == '"':
-                                span = Span(self._position, self._position + 2, self._file_map)
-                                
-                                self._diagnostic.emit(
-                                    ErrorCode.W0001,
-                                    { "quote_used" : start_quotes,
-                                      "quote_escape" : "'",
-                                      "name_quote_used" : "double" },
-                                    [span],
-                                    [(span, f"`\\'` here is unnecessary, it has no special meaning in this string")]
-                                )
-                            
-                            self._advance(2)
-                            
-                        # Escape `"`
-                        case '"':
-                            chars.append('"')
-                            
-                            # Warning de codigo basura al escapar una comilla que no necesita ser escapada
-                            if start_quotes == "'":
-                                span = Span(self._position, self._position + 2, self._file_map)
-                                
-                                self._diagnostic.emit(
-                                    ErrorCode.W0001,
-                                    { "quotes_used" : start_quotes,
-                                      "quotes_escaped" : '"',
-                                      "name_quote_used": "single" },
-                                    [span],
-                                    [(span, f'`\\"` here is unnecessary, it has no special meaning in this string')]
-                                )
-                            
-                            self._advance(2)
-                        
-                        # Escape no soportado o invalido
-                        case _:
-                            span = Span(self._position, self._position + 2, self._file_map)
-                            
-                            self._diagnostic.emit(
-                                ErrorCode.E0003,
-                                { "escape" : f"{char}{self._peek(1)}" },
-                                [span],
-                                [(span, "this escape sequence is not supported in Zonetic")]
-                            )
-                            
-                            self._advance(2)
-                
-                # Newline Literal
-                case '\n':
-                    chars.append('\n')
-                    self._advance(1)
-                
-                # Tab Literal
-                case '\t':
-                    chars.append('\t')
-                    self._advance(1)
-                
-                # Posible cierre de comillas
-                case quotes if quotes == start_quotes:
-                    success = True
-                    self._advance(1)
-                    break
-                
-                # Cualquier otro caracter
-                case _:
-                    chars.append(char)
-                    self._advance(1)
-        
-        # Error de comillas no cerradas                
-        if not success:
+
+            if char == '\\':
+                self._scan_string_escape(chars, opening_quote)
+
+            elif char == '\n':
+                chars.append('\n')
+                self._advance(1)
+
+            elif char == '\t':
+                chars.append('\t')
+                self._advance(1)
+
+            elif char == opening_quote:
+                closed = True
+                self._advance(1)
+                break
+
+            else:
+                chars.append(char)
+                self._advance(1)
+
+        if not closed:
             self._diagnostic.emit(
                 ErrorCode.E0004,
-                { "quote" : start_quotes },
-                [Span(start_position, self._position, self._file_map)],
-                [(Span(self._position-1, self._position, self._file_map), "`{quote}` was expected here to close the string")]
+                {"quote": opening_quote},
+                [Span(start, self._pos, self._file_map)],
+                [(Span(self._pos - 1, self._pos, self._file_map),
+                  f"'{opening_quote}' was expected here to close the string")],
             )
             return
-            
+
         self._tokens._add(
-            Token(
-                TokenType.LITERAL_STRING,
-                "".join(chars),
-                Span(start_position, self._position, self._file_map)
+            Token(TokenType.LITERAL_STRING, "".join(chars), self._span_from(start))
+        )
+
+    def _scan_string_escape(self, chars: list, opening_quote: str) -> None:
+        """Handle a single escape sequence inside a string literal."""
+        next_char = self._peek(1)
+
+        match next_char:
+            case 'n':
+                chars.append('\n')
+                self._advance(2)
+
+            case 't':
+                chars.append('\t')
+                self._advance(2)
+
+            case '\\':
+                chars.append('\\')
+                self._advance(2)
+
+            case "'":
+                chars.append("'")
+                if opening_quote == '"':
+                    span = Span(self._pos, self._pos + 2, self._file_map)
+                    self._diagnostic.emit(
+                        ErrorCode.W0001,
+                        {"quote_used": opening_quote, "quote_escape": "'", "name_quote_used": "double"},
+                        [span],
+                        [(span, r"'\'' here is unnecessary inside a double-quoted string")],
+                    )
+                self._advance(2)
+
+            case '"':
+                chars.append('"')
+                if opening_quote == "'":
+                    span = Span(self._pos, self._pos + 2, self._file_map)
+                    self._diagnostic.emit(
+                        ErrorCode.W0001,
+                        {"quote_used": opening_quote, "quote_escape": '"', "name_quote_used": "single"},
+                        [span],
+                        [(span, r'\"" here is unnecessary inside a single-quoted string')],
+                    )
+                self._advance(2)
+
+            case _:
+                span = Span(self._pos, self._pos + 2, self._file_map)
+                self._diagnostic.emit(
+                    ErrorCode.E0003,
+                    {"escape": f"\\{next_char}"},
+                    [span],
+                    [(span, "this escape sequence is not supported in Zonetic")],
                 )
-            )
- 
-            
-    def scan_script(self) -> ListTokens:
+                self._advance(2)
+
+    # ------------------------------------------------------------------
+    # Unknown character
+    # ------------------------------------------------------------------
+
+    def _scan_unknown(self, char: str) -> None:
+        span = self._span(1)
+        self._diagnostic.emit(
+            ErrorCode.E0001,
+            {"char": char},
+            [span],
+            [(span, "this character is not recognized by Zonetic")],
+        )
+        self._advance(1)
+
+    # ------------------------------------------------------------------
+    # Main scan loop
+    # ------------------------------------------------------------------
+
+    def scan(self) -> ListTokens:
         while not self._is_end():
             char = self._peek(0)
-            
+
             match char:
-                case ' ': 
+                case ' ' | '\r' | '\t':
                     self._advance(1)
-                
+
                 case '\n':
-                    self._tokens._add(
-                        Token(
-                            TokenType.NEWLINE,
-                            '\\n',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                
-                case ';': 
-                    self._tokens._add(
-                        Token(
-                            TokenType.SEMICOLON,
-                            ';',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                
+                    self._add_token(TokenType.NEWLINE, '\n')
+
+                case ';':
+                    self._add_token(TokenType.SEMICOLON, ';')
+
                 case ':':
-                    self._tokens._add(
-                        Token(
-                            TokenType.COLON,
-                            ':',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                
+                    self._add_token(TokenType.COLON, ':')
+
                 case ',':
-                    self._tokens._add(
-                        Token(
-                            TokenType.COMMA,
-                            ',',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.COMMA, ',')
+
                 case '(':
-                    self._tokens._add(
-                        Token(
-                            TokenType.LPAREN,
-                            '(',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.LPAREN, '(')
+
                 case ')':
-                    self._tokens._add(
-                        Token(
-                            TokenType.RPAREN,
-                            ')',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.RPAREN, ')')
+
                 case '{':
-                    self._tokens._add(
-                        Token(
-                            TokenType.LBRACE,
-                            '{',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.LBRACE, '{')
+
                 case '}':
-                    self._tokens._add(
-                        Token(
-                            TokenType.RBRACE,
-                            '}',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.RBRACE, '}')
+
                 case '[':
-                    self._tokens._add(
-                        Token(
-                            TokenType.LBRACKET,
-                            '[',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.LBRACKET, '[')
+
                 case ']':
-                    self._tokens._add(
-                        Token(
-                            TokenType.RBRACKET,
-                            ']',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                
+                    self._add_token(TokenType.RBRACKET, ']')
+
                 case '.':
-                    self._tokens._add(
-                        Token(
-                            TokenType.DOT,
-                            '.',
-                            self._generic_span(1)
-                        )
-                    )
-                    self._advance(1)
-                    
+                    self._add_token(TokenType.DOT, '.')
+
                 case '+':
                     self._scan_plus()
-                    
+
                 case '-':
                     self._scan_minus()
-                    
+
                 case '*':
                     self._scan_star()
-                    
+
                 case '/':
                     self._scan_slash()
-                    
+
                 case '%':
-                    self._scan_percentage()
-                    
+                    self._scan_percent()
+
                 case '=':
                     self._scan_equal()
-                    
+
                 case '<':
                     self._scan_less()
-                    
+
                 case '>':
                     self._scan_greater()
-                    
+
                 case '!':
                     self._scan_bang()
-                
+
                 case '&':
                     self._scan_ampersand()
-                
+
                 case '|':
                     self._scan_pipe()
-                
+
                 case '~':
-                    self._scan_tild()
-                
+                    self._scan_tilde()
+
                 case '^':
-                    self._match_next(
-                        '=',
-                        TokenType.OPERATOR_BXOR_ASSIGN,
-                        '^=',
-                        
-                        TokenType.BIT_XOR,
-                        '^'
+                    self._scan_compound(
+                        TokenType.BIT_XOR,             '^',
+                        TokenType.OPERATOR_BXOR_ASSIGN, '^=',
                     )
-                    
+
+                case _ if char == '_' or char.isalpha():
+                    self._scan_identifier_or_keyword()
+
+                case _ if char == '"' or char == "'":
+                    self._scan_string()
+
+                case _ if char.isdigit():
+                    self._scan_number()
+
                 case _:
-                    self._scan_other(char)
-         
-              
+                    self._scan_unknown(char)
+
         self._tokens._add(
-            Token(
-                TokenType.EOF,
-                "EOF",
-                Span(self._code_len, self._code_len, self._file_map)
-                )
-            )
-        
+            Token(TokenType.EOF, 'EOF', Span(self._source_len, self._source_len, self._file_map))
+        )
+
         return self._tokens
-
-

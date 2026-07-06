@@ -15,7 +15,7 @@ class Span:
         self.file_map = file_map
         
     def to_string(self) -> str:
-        return self.file_map.code[self.start : self.end]
+        return self.file_map.source[self.start : self.end]
         
         
     

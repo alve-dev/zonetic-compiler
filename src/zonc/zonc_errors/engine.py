@@ -1,233 +1,142 @@
+"""Diagnostic engine — the orchestrator of the Zonetic error system.
+
+All compiler passes call `engine.emit(...)` to record errors and warnings.
+Once a pass finishes, `engine.display()` sorts, renders, and prints every
+diagnostic, then exits with a non-zero status code.
+
+Duplicate suppression
+---------------------
+The engine tracks how many times each error code has been emitted.
+When the same code fires more than once, the renderer receives a flag
+that tells it to print a shorter version of the diagnostic — no lengthy
+explanation, just the location and message. This avoids flooding the
+terminal when a single root cause triggers the same error dozens of times.
+"""
+
+import sys
+
 from .error_registry import ERROR_REGISTRY
 from .error_code import ErrorCode
 from .severity import Severity
 from zonc.location_file import Span
 from .diagnostic import Diagnostic
 from .renderer import DiagnosticRenderer
-import sys
+
+_MAX_DIAGNOSTICS_SHOWN = 10
+
 
 class DiagnosticEngine:
-    ERROR_OCCURRENCE = {
-        ErrorCode.E0001 : 0,
-        ErrorCode.E0002 : 0,
-        ErrorCode.E0003 : 0,
-        ErrorCode.E0004 : 0,
-        ErrorCode.E0005 : 0,
-        ErrorCode.E0006 : 0,
-        ErrorCode.E0007 : 0,
-        ErrorCode.E0008 : 0,
-        ErrorCode.E0009 : 0,
-        ErrorCode.E0010 : 0,
-        ErrorCode.E0011 : 0,
-        ErrorCode.E0012 : 0,
-        
-        ErrorCode.W0001 : 0,
-        
-        ErrorCode.E1001 : 0,
-        ErrorCode.E1002 : 0,
-        
-        ErrorCode.E2001 : 0,
-        ErrorCode.E2002 : 0,
-        ErrorCode.E2003 : 0,
-        ErrorCode.E2004 : 0,
-        ErrorCode.E2005 : 0,
-        ErrorCode.E2006 : 0,
-        ErrorCode.E2007 : 0,
-        ErrorCode.E2008 : 0,
-        ErrorCode.E2009 : 0,
-        ErrorCode.E2010 : 0,
-        ErrorCode.E2011 : 0,
-        ErrorCode.E2012 : 0,
-        ErrorCode.E2013 : 0,
-        ErrorCode.E2014 : 0,
-        ErrorCode.E2015 : 0,
-        ErrorCode.E2016 : 0,
-        ErrorCode.E2017 : 0,
-        ErrorCode.E2018 : 0,
-        ErrorCode.E2019 : 0,
-        ErrorCode.E2020 : 0,
-        ErrorCode.E2021 : 0,
-        ErrorCode.E2022 : 0,
-        ErrorCode.E2023 : 0,
-        ErrorCode.E2024 : 0,
-        ErrorCode.E2025 : 0,
-        ErrorCode.E2026 : 0,
-        ErrorCode.E2027 : 0,
-        ErrorCode.E2028 : 0,
-        ErrorCode.E2029 : 0,
-        ErrorCode.E2030 : 0,
-        ErrorCode.E2031 : 0,
-        ErrorCode.E2032 : 0,
-        ErrorCode.E2033 : 0,
-        ErrorCode.E2034 : 0,
-        
-        ErrorCode.W2001 : 0,
-        
-        ErrorCode.E3001 : 0,
-        ErrorCode.E3002 : 0,
-        ErrorCode.E3003 : 0,
-        ErrorCode.E3004 : 0,
-        ErrorCode.E3005 : 0,
-        ErrorCode.E3006 : 0,
-        ErrorCode.E3007 : 0,
-        ErrorCode.E3008 : 0,
-        ErrorCode.E3009 : 0,
-        ErrorCode.E3010 : 0,
-        ErrorCode.E3011 : 0,
-        ErrorCode.E3012 : 0,
-        ErrorCode.E3013 : 0,
-        ErrorCode.E3014 : 0,
-        ErrorCode.E3015 : 0,
-        ErrorCode.E3016 : 0,
-        ErrorCode.E3017 : 0,
-        ErrorCode.E3018 : 0,
-        ErrorCode.E3019 : 0,
-        ErrorCode.E3020 : 0,
-        ErrorCode.E3021 : 0,
-        ErrorCode.E3022 : 0,
-        ErrorCode.E3023 : 0,
-        ErrorCode.E3024 : 0,
-        ErrorCode.E3025 : 0,
-        ErrorCode.E3026 : 0,
-        ErrorCode.E3027 : 0,
-        ErrorCode.E3028 : 0,
-        ErrorCode.E3029 : 0,
-        ErrorCode.E3030 : 0,
-        ErrorCode.E3031 : 0,
-        ErrorCode.E3032 : 0,
-        ErrorCode.E3033 : 0,
-        ErrorCode.E3034 : 0,
-        ErrorCode.E3035 : 0,
-        ErrorCode.E3036 : 0,
-        ErrorCode.E3037 : 0,
-        ErrorCode.E3038 : 0,
-        ErrorCode.E3039 : 0,
-        ErrorCode.E3040 : 0,
-        ErrorCode.E3041 : 0,
-        ErrorCode.E3042 : 0,
-        ErrorCode.E3043 : 0,
-        ErrorCode.E3044 : 0,
-        ErrorCode.E3045 : 0,
-        ErrorCode.E3046 : 0,
-        ErrorCode.E3047 : 0,
-        ErrorCode.E3048 : 0,
-        ErrorCode.E3049 : 0,
-        ErrorCode.E3050 : 0,
-        ErrorCode.E3051 : 0,
-        
-        ErrorCode.W3001 : 0,
-        ErrorCode.W3002 : 0,
-        ErrorCode.W3003 : 0,
-        ErrorCode.W3004 : 0,
-        ErrorCode.W3005 : 0,
-        ErrorCode.W3006 : 0,
-        
-        ErrorCode.E4001: 0,
-        ErrorCode.E4002: 0,
-        
-        ErrorCode.E5001: 0,
-        ErrorCode.E5002: 0,
-        ErrorCode.E5003: 0,
-        ErrorCode.E5004: 0,
-        ErrorCode.E5005: 0,
-        
-        ErrorCode.W5001: 0,
-    }
+    def __init__(self, filename: str, source: str, file_map) -> None:
+        self.filename = filename
+        self.error_count = 0
+        self.warning_count = 0
 
-    
-    def __init__(self, name_file: str, code: str, file_map) -> None:
-        self.errors: list[Diagnostic] = []
-        self.renderer = DiagnosticRenderer(code, file_map)
-        self.name_file = name_file
-        self.count_errors = 0
-        self.count_warnings = 0
-    
-    
+        self._diagnostics: list[Diagnostic] = []
+        self._renderer = DiagnosticRenderer(source, file_map)
+
+        # Counts how many times each error code has been emitted this session.
+        # Initialized from ERROR_REGISTRY so new error codes are picked up
+        # automatically without needing to update this file.
+        self._occurrence: dict[ErrorCode, int] = {code: 0 for code in ERROR_REGISTRY}
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def emit(
         self,
-        error_code: ErrorCode,
+        code: ErrorCode,
         args: dict[str, str] | None,
         span_code: list[Span] | None,
-        span_error: list[tuple[Span, str]] | None,
+        span_labels: list[tuple[Span, str]] | None,
         traceback: bool = False,
-        call_stack: list | None = None
+        call_stack: list | None = None,
     ) -> None:
-        if error_code in ERROR_REGISTRY:
-            err_def = ERROR_REGISTRY[error_code]
-            if traceback:
-                self.errors.append(
-                    Diagnostic(
-                        err_def,
-                        args,
-                        None,
-                        span_error,
-                        True,
-                        call_stack,
-                        self.name_file
-                    )
-                )
-            
-            else:
-                self.errors.append(
-                    Diagnostic(
-                        err_def,
-                        args,
-                        span_code,
-                        span_error,
-                        False,
-                        None,
-                        self.name_file,
-                    )
-                )
-            
-            if err_def.severity == Severity.ERROR:
-                self.count_errors += 1
-                
-            elif err_def.severity == Severity.WARNING:
-                self.count_warnings += 1
-                
-        else:
-            print(f"Internal Error: {error_code} code not exist in the Zonetic Error Registry.")
-            
-            
+        """Record a diagnostic. Call this from any compiler pass.
+
+        Args:
+            code:        The error or warning code.
+            args:        Template arguments for the error message (may be None).
+            span_code:   Source spans highlighted as the primary error site.
+            span_labels: (span, label) pairs shown as inline annotations.
+            traceback:   If True, attaches a call-stack trace to the diagnostic.
+            call_stack:  The call stack to attach when traceback=True.
+        """
+        if code not in ERROR_REGISTRY:
+            print(f"[internal] error code {code!r} is not registered in the Zonetic Error Registry")
+            return
+
+        definition = ERROR_REGISTRY[code]
+
+        diagnostic = Diagnostic(
+            definition,
+            args,
+            span_code  if not traceback else None,
+            span_labels,
+            traceback,
+            call_stack if traceback else None,
+            self.filename,
+        )
+        self._diagnostics.append(diagnostic)
+
+        if definition.severity == Severity.ERROR:
+            self.error_count += 1
+        elif definition.severity == Severity.WARNING:
+            self.warning_count += 1
+
     def has_errors(self) -> bool:
-        return self.count_errors > 0
-    
-    
-    def clear_engine(self) -> None:
-        self.errors.clear()
-        for k in self.ERROR_OCCURRENCE:
-            self.ERROR_OCCURRENCE[k] = 0
-        
-            
+        return self.error_count > 0
+
+    def reset(self) -> None:
+        """Clear all recorded diagnostics and reset all counters.
+        Used between compilation units in multi-file builds.
+        """
+        self._diagnostics.clear()
+        self.error_count = 0
+        self.warning_count = 0
+        for code in self._occurrence:
+            self._occurrence[code] = 0
+
     def display(self) -> None:
-        count_err = 0
-        count_warn = 0
-        
-        self.errors.sort(key=lambda e: e.span_errors[0][0].start)
-        
-        for diag in self.errors:
-            self.ERROR_OCCURRENCE[diag.error_definition.error_code] += 1
-            
-            if self.ERROR_OCCURRENCE[diag.error_definition.error_code] > 1:
-                msg_formated = self.renderer.render(diag, True)
-            else:
-                msg_formated = self.renderer.render(diag, False)
-                
-            print(msg_formated)
+        """Render and print all diagnostics, then exit with status 1.
+
+        Diagnostics are sorted by their first span's byte offset so they
+        appear in source order. After 10 diagnostics the output is truncated
+        with a summary — fixing earlier errors often eliminates later ones.
+        """
+        self._diagnostics.sort(key=lambda d: d.span_errors[0][0].start)
+
+        shown_error = 0
+        shown_warning = 0
+        for diag in self._diagnostics:
+            code = diag.error_definition.error_code
+            self._occurrence[code] += 1
+
+            # first occurrence gets the full explanation; repeats get the short form
+            is_repeat = self._occurrence[code] > 1
+            print(self._renderer.render(diag, is_repeat))
             print()
             print()
-            
-            if diag.error_definition.severity == Severity.ERROR:
-                count_err += 1
-            else:
-                count_warn += 1
-            
-            if count_err + count_warn == 10:
-                print(f"... and {self.count_errors - count_err} more errors, plus {self.count_warnings - count_warn} more warnings; I recommend resolving errors from the top down, sometimes there are cascading errors.")
+
+            if diag.error_definition.severity == Severity.ERROR: shown_error += 1
+            else: shown_warning += 1
+
+            if (shown_error + shown_warning) == _MAX_DIAGNOSTICS_SHOWN:
+                self._print_truncation_notice(shown_error, shown_warning)
                 break
-            
+
         sys.exit(1)
-            
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
+    def _print_truncation_notice(self, shown_error: int, shown_warning: int) -> None:
+        remaining_errors   = self.error_count   - shown_error
+        remaining_warnings = self.warning_count - shown_warning
+        print(
+            f"... and {remaining_errors} more error(s), "
+            f"plus {remaining_warnings} more warning(s). "
+            f"Resolve errors from the top down — "
+            f"fixing one often eliminates several others."
+        )
