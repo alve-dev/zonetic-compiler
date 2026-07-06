@@ -22,7 +22,7 @@ pacman -S mingw-w64-ucrt-x86_64-gcc
 Once the compiler is installed, open **PowerShell** and run the installer. This will set up Zonetic in `~/.zonetic` and configure the global `zon` command:
 
 ```powershell
-irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows.ps1 | iex
+irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_windows.ps1 | iex
 ```
 
 > [!IMPORTANT]
@@ -33,7 +33,7 @@ irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/
 To download the entire repository, including `examples/` and `docs/`:
 
 ```powershell
-irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows_complete.ps1 | iex
+irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_windows_complete.ps1 | iex
 ```
 
 ---
