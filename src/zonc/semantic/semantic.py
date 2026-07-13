@@ -37,6 +37,7 @@ class Semantic(TypeInferenceMixin):
         self._current_func: FuncSymbol | None = None
         self._loop_depth: int = 0
         self.has_main = False
+        self.ARRAY_FAMILY = {8}
 
     # ------------------------------------------------------------------
     # Built-in registration
@@ -273,27 +274,28 @@ class Semantic(TypeInferenceMixin):
         scope: Environment,
         branch_tracker: BranchTracker,
     ) -> None:
-        symbol = scope.get(stmt.name)
+        name = stmt.target if isinstance(stmt.target, str) else stmt.target.name
+        symbol = scope.get(name)
         if isinstance(symbol, FuncSymbol):
             return
         if symbol is None:
-            hint = leven_hint(stmt.name, scope.collect("var"))
-            self._diag.emit(ErrorCode.E3001, {"name": stmt.name, "leven": hint}, [stmt.span],
+            hint = leven_hint(name, scope.collect("var"))
+            self._diag.emit(ErrorCode.E3001, {"name": name, "leven": hint}, [stmt.span],
                 [(stmt.span_name, "does not exist in this scope{leven}")])
             return
 
         was_empty = symbol.is_empty
         self._check_assignment(stmt, scope, not_empty=True)
 
-        if branch_tracker is not None and not scope.exists_here(stmt.name):
-            if stmt.name in branch_tracker.counts:
-                branch_tracker.counts[stmt.name][0] += 1
+        if branch_tracker is not None and not scope.exists_here(name):
+            if name in branch_tracker.counts:
+                branch_tracker.counts[name][0] += 1
             elif symbol is not None and was_empty:
-                branch_tracker.counts[stmt.name] = [1, symbol.decl_span]
+                branch_tracker.counts[name] = [1, symbol.decl_span]
                 symbol.is_empty = True
 
     def _check_initialization(self, stmt: InitializationStmt, scope: Environment) -> None:
-        inferred = self._infer(stmt.assign_stmt.value, scope, name=stmt.assign_stmt.name)
+        inferred = self._infer(stmt.assign_stmt.value, scope, name=stmt.assign_stmt.target)
         struct_scope = None
         if isinstance(inferred, tuple):
             struct_scope, inferred = inferred[1], inferred[0]
@@ -365,11 +367,13 @@ class Semantic(TypeInferenceMixin):
         is_field: bool = False,
         field_scope: Environment = None,
     ) -> None:
-        symbol = field_scope.get(node.name) if field_scope is not None else scope.get(node.name)
+        is_array = isinstance(node.target, IndexExpr)
+        name = node.target.name if is_array else node.target
+        symbol = field_scope.get(name) if field_scope is not None else scope.get(name)
 
         if symbol is None:
-            hint = leven_hint(node.name, scope.collect("var"))
-            self._diag.emit(ErrorCode.E3001, {"name": node.name}, [node.span],
+            hint = leven_hint(name, scope.collect("var"))
+            self._diag.emit(ErrorCode.E3001, {"name": name}, [node.span],
                 [(node.span_name, f"does not exist in this scope{hint}")])
             return
 
@@ -377,17 +381,37 @@ class Semantic(TypeInferenceMixin):
             return
 
         if not symbol.mutability and not symbol.is_empty:
-            self._diag.emit(ErrorCode.E3005, {"name": node.name}, [node.span, symbol.decl_span],
+            self._diag.emit(ErrorCode.E3005, {"name": name}, [node.span, symbol.decl_span],
                 [(node.span_name, "is immutable, it was already assigned a value"),
-                 (symbol.decl_span, "was first defined as immutable here")])
+                  (symbol.decl_span, "was first defined as immutable here")])
             return
 
-        if self._loop_depth > 0 and not scope.exists_here(node.name) and not symbol.mutability and symbol.is_empty:
+        if self._loop_depth > 0 and not scope.exists_here(name) and not symbol.mutability and symbol.is_empty:
             self._diag.emit(ErrorCode.E3016, None, [node.span],
                 [(node.span_name, "cannot initialize an outer `inmut` variable here")])
             return
 
-        value_type = self._infer(node.value, scope, is_field, node.name)
+        # Validate the index expression if targeting an array slot
+        if is_array:
+            if not symbol.zontype.num in self.ARRAY_FAMILY:
+                self._diag.emit(
+                    ErrorCode.E3052, {"var_name": name, "type": symbol.zontype.name}, [node.span_name],
+                    [(node.span_name, f"It is not an indexable symbol.")]
+                )
+                return
+
+            idx_type = self._infer(node.target.idx_expr, scope)
+            if isinstance(idx_type, tuple): 
+                idx_type = idx_type[0]
+            if idx_type.num not in {1, 6}:
+                self._diag.emit(
+                    ErrorCode.E3053, {"type": idx_type.name}, [node.target.idx_expr.span],
+                    [(node.target.idx_expr.span, f"it is not an integer")]
+                )
+                return
+
+        value_type = self._infer(node.value, scope, is_field, name)
+
         if isinstance(value_type, tuple):
             symbol.scope_object = value_type[1]
             value_type = value_type[0]
@@ -395,17 +419,20 @@ class Semantic(TypeInferenceMixin):
         if value_type.num == 0:
             return
 
-        if symbol.zontype.num == 0:
+        # Adjust types dynamically based on variable nature (array vs scalar)
+        expected_type_num = symbol.zontype.get_array_element_type()[0] if is_array else symbol.zontype.num
+
+        if not is_array and symbol.zontype.num == 0:
             symbol.zontype.name = value_type.name
             symbol.zontype.num  = value_type.num
-        elif not self._types_compatible(symbol.zontype.num, value_type.num):
+        elif not self._types_compatible(expected_type_num, value_type.num):
             err = (
                 node.value.stmts[node.value.give_address].value.span
                 if isinstance(node.value, BlockExpr)
                 else node.value.span
             )
             self._diag.emit(ErrorCode.E3006,
-                {"name": node.name, "expected_type": symbol.zontype.name, "found_type": value_type.name},
+                {"name": name, "expected_type": symbol.zontype.name, "found_type": value_type.name},
                 [node.span],
                 [(err, "this expression returns `{found_type}`, but `{name}` expects `{expected_type}`")])
             return

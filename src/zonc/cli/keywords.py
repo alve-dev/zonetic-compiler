@@ -7,11 +7,12 @@ Imported by the Lexer and by the REPL completer.
 from zonc.scanner import TokenType
 
 KEYWORDS = {
+    "int":      TokenType.KEYWORD_INT64,
     "int64":    TokenType.KEYWORD_INT64,
     "int32":    TokenType.KEYWORD_INT32,
     "float":    TokenType.KEYWORD_FLOAT,
     "double":   TokenType.KEYWORD_DOUBLE,
-    "string":   TokenType.KEYWORD_STRING,
+    "str":      TokenType.KEYWORD_STRING,
     "bool":     TokenType.KEYWORD_BOOL,
     "mut":      TokenType.KEYWORD_MUT,
     "inmut":    TokenType.KEYWORD_INMUT,

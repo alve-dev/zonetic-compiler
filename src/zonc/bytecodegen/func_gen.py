@@ -38,6 +38,28 @@ from zonc.zonast import (
     FuncForm, InitializationStmt,
     IntLiteral, BoolLiteral, FloatLiteral, StringLiteral,
 )
+from dataclasses import dataclass
+
+# ------------------------------------------------------------------
+# Frame Info
+# ------------------------------------------------------------------
+
+@dataclass
+class FrameInfo(list):
+    bytes_needed: int
+    has_call: bool
+    saved_regs: tuple
+    used_heap: bool
+    bool_slot: object = None
+    array_ptr: int = 0
+    array_top: int = 0
+    spill_ptr: int = 0
+
+    def __post_init__(self):
+        super().__init__([
+            self.spill_ptr, self.bytes_needed, self.has_call, 
+            self.saved_regs, self.used_heap, self.bool_slot, self.array_ptr
+        ])
 
 
 # ------------------------------------------------------------------
@@ -48,7 +70,7 @@ def prologue(emitter, stmts: list, params: list = None) -> None:
     """Emit the function prologue: allocate frame, save callee-saved registers."""
     allocator   = LinearScanRegisterAllocation(num_available_regs=7, num_available_fregs=12)
     bytes_needed, has_call, used_s, used_heap = allocator.analyze_function(stmts, params)
-    array_space = allocator.get_array_space(stmts)
+    array_bytes = allocator.array_bytes
 
     # allocate frame and save s0 (frame pointer) at the top
     emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 2, 2, -bytes_needed)
@@ -69,11 +91,23 @@ def prologue(emitter, stmts: list, params: list = None) -> None:
         offset -= 8
 
     # reserve space for stack arrays — spill slots go below this area
-    offset    -= array_space
-    array_ptr  = offset
+    array_top = offset
+    offset -= array_bytes
+    array_ptr = offset
+    spill_ptr = offset 
 
     emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 8, 2, bytes_needed)
-    emitter.offset_stack.append([offset, bytes_needed, has_call, used_s, used_heap, None, array_ptr])
+    frame = FrameInfo(
+        bytes_needed=bytes_needed,
+        has_call=has_call,
+        saved_regs=used_s,
+        used_heap=used_heap,
+        bool_slot=None,
+        array_ptr=array_ptr,
+        array_top=array_top,
+        spill_ptr=spill_ptr
+    )
+    emitter.offset_stack.append(frame)
 
     if used_heap:
         emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -100)
@@ -82,7 +116,11 @@ def prologue(emitter, stmts: list, params: list = None) -> None:
 
 def epilogue(emitter) -> None:
     """Emit the function epilogue: restore callee-saved registers, deallocate frame."""
-    _, bytes_reserved, has_call, used_s, used_heap, _bool_slot, _array_ptr = emitter.offset_stack[-1]
+    frame = emitter.offset_stack[-1]
+    bytes_reserved = frame.bytes_needed
+    has_call = frame.has_call
+    used_s = frame.saved_regs
+    used_heap = frame.used_heap
 
     offset = bytes_reserved - 16
 

@@ -87,6 +87,7 @@ class Emitter:
         self.data_section_size: int  = 0
         self.entry_point: int        = 0
         self.string_pool: dict       = {}
+        self.constant_pool           = {}
 
     # ------------------------------------------------------------------
     # Code position

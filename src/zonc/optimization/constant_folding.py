@@ -49,6 +49,18 @@ class ConstantFolding:
 
         for stmt in node.stmts:
             if isinstance(stmt, DeclarationStmt):
+                if stmt.type.size is not None:
+                    size_folded = self._to_node(self._eval(stmt.type.size, scope))
+                    
+                    if not isinstance(size_folded, IntLiteral):
+                        self._diag.emit(
+                            ErrorCode.E5006, None, [stmt.span], [(stmt.type.size.span, "It is not an integer or a constant variable.")]
+                        )
+                        continue
+                    
+                    else:
+                        stmt.type.size = size_folded
+
                 scope.define(stmt.name, Symbol(stmt.mut, stmt.type, True, stmt.span))
 
             elif isinstance(stmt, AssignmentStmt):
@@ -79,6 +91,10 @@ class ConstantFolding:
 
             elif isinstance(stmt, FuncForm):
                 self.visit_Program(stmt.block_expr)
+
+            elif isinstance(stmt, WhileForm):
+                cond_folded = self._to_node(self._eval(stmt.condition_field, scope))
+                stmt.condition_field = cond_folded
 
             else:
                 return None
@@ -138,6 +154,7 @@ class ConstantFolding:
     def _fold_assignment(self, node: AssignmentStmt, scope: Environment) -> None:
         """Fold the right-hand side of a plain assignment."""
         span   = node.value.span
+        is_array = isinstance(node.target, IndexExpr)
         folded = self._eval(node.value, scope, in_var=True)
 
         if isinstance(folded, tuple):
@@ -148,8 +165,19 @@ class ConstantFolding:
             new_value = literal
 
         literal.span = span
+        symbol = None
 
-        symbol = scope.get(node.name)
+        if is_array:
+            symbol = scope.get(node.target.name)
+            idx_folded = self._to_node(self._eval(node.target.idx_expr, scope))
+            if isinstance(idx_folded, IntLiteral) and isinstance(symbol.zontype.size, IntLiteral):
+                self._check_index(idx_folded.value, symbol.zontype.size.value, node.target.idx_expr.span)
+
+            node.target.idx_expr = idx_folded
+
+        else:
+            symbol = scope.get(node.target)
+
         self._apply_folded(node, symbol, literal, new_value, span, target="value")
 
     def _apply_folded(self, node, symbol: Symbol, literal, new_value, span, target: str) -> None:
@@ -293,6 +321,16 @@ class ConstantFolding:
 
             case CastExpr():
                 return self._eval_cast(node, scope, in_var)
+            
+            case IndexExpr():
+                idx_folded = self._to_node(self._eval(node.idx_expr, scope))
+                symbol = scope.get(node.name)
+                if isinstance(idx_folded, IntLiteral) and isinstance(symbol.zontype.size, IntLiteral):
+                    self._check_index(idx_folded.value, symbol.zontype.size.value, node.idx_expr.span)
+
+                node.idx_expr = idx_folded
+
+                return node
 
             case BlockExpr():
                 self.visit_Program(node)
@@ -365,7 +403,7 @@ class ConstantFolding:
                         self._diag.emit(ErrorCode.E5001, None, [node.span],
                             [(node.right.span, "constant folding evaluated this divisor to zero")])
                     return node
-                return left / right if isinstance(left, float) else left / right
+                return left / right
 
             case Operator.MOD:
                 if right == 0:
@@ -509,3 +547,18 @@ class ConstantFolding:
             return False
 
         return False
+    
+    # ------------------------------------------------------------------
+    # Index checking
+    # ------------------------------------------------------------------
+    def _check_index(self, idx: int, size: int, span_idx):
+        if idx >= size:
+            self._diag.emit(
+                ErrorCode.E5007, {"index": idx, "size": size, "max_index": size-1}, [span_idx],
+                [(span_idx, "It is out of bounds.")]
+            )
+
+        elif idx < 0:
+            self._diag.emit(
+                ErrorCode.E5008, {"index": idx}, [span_idx], [(span_idx, "it is negative.")]
+            )

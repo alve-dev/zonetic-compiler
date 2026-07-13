@@ -14,7 +14,7 @@ Print/println ecall codes
 
 from .instruction import (
     emit_i_type, emit_s, emit_f_type,
-    emit_jump, emit_ecall, emit_ecall_store,
+    emit_jump, emit_ecall, emit_ecall_store, emit_r_type, emit_b_type
 )
 from .expr_gen import generate_expr, generate_cond
 from .rodata import generate_literal_num, generate_literal_f
@@ -40,6 +40,106 @@ def _move_to_return_reg(emitter, reg: ZonVar) -> None:
         emit_f_type(emitter, OpCode.OP_F, 10, src, src, 0x00, F7.FSGNJ_D)
 
 
+def _emit_array_assignment(emitter, node: AssignmentStmt) -> None:
+    """Handles assignment when target is an IndexExpr (e.g., arr[9] = value).
+    For now, it assumes the index is a literal integer for testing purposes.
+    """
+    array_expr = node.target
+    array_name = array_expr.name
+
+    var_info = emitter.symbol_table.resolve(array_name)
+    
+    val_reg = generate_expr(emitter, node.value)
+    val_operand = emitter._read_operand(val_reg, _scratch(emitter, val_reg.regt))
+
+    if isinstance(array_expr.idx_expr, IntLiteral):
+        literal_index = array_expr.idx_expr.value
+        byte_offset = literal_index * 8
+
+        target_offset = var_info.offset_stack + byte_offset
+
+        if val_reg.regt == RegT.X:
+            emit_s(emitter, OpCode.OP_S, F3_S.SD, 2, val_operand, target_offset)
+        else:
+            emit_s(emitter, OpCode.OP_FS, F3_FS.FSD, 2, val_operand, target_offset)
+
+        emitter.reg_manager.free_temp(val_reg)
+
+    else:
+        idx_reg = generate_expr(emitter, array_expr.idx_expr)
+        idx_operand = emitter._read_operand(idx_reg, emitter.REG_SCRATCH_X)
+        scratch_size = 30
+
+        array_size = var_info.zontype.size.value
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, scratch_size, 0, array_size)
+        valid_label = emitter.label_manager.create()
+
+        emit_b_type(emitter, OpCode.OP_B, F3_B.BLTU, idx_operand, scratch_size, valid_label)
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -900)
+        emit_ecall(emitter) 
+
+        emitter.label_manager.place_label(valid_label, emitter.get_pc())
+
+        scratch_addr = emitter.REG_SCRATCH_X
+
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.SLL_SLLI, scratch_addr, idx_operand, 3)
+        emit_r_type(emitter, OpCode.OP, F3_ALU.ADD_SUB, F7.STANDARD, scratch_addr, 2, scratch_addr)
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, scratch_addr, scratch_addr, var_info.offset_stack)
+
+        if val_reg.regt == RegT.X:
+            emit_s(emitter, OpCode.OP_S, F3_S.SD, scratch_addr, val_operand, 0)
+
+        else:
+            emit_s(emitter, OpCode.OP_FS, F3_FS.FSD, scratch_addr, val_operand, 0)
+
+        emitter.reg_manager.free_temp(idx_reg)
+        emitter.reg_manager.free_temp(val_reg)
+
+def _emit_assignment(emitter, node: AssignmentStmt) -> None:
+    slot = emitter.symbol_table.resolve(node.target)
+
+    if slot.is_global:
+        reg = generate_expr(emitter, node.value, slot.zontype.num)
+        src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
+        if slot.zontype.num in (1, 3, 4, 6):
+            emit_s(emitter, OpCode.OP_S,  F3_S.SD,   3, src, slot.offset_global)
+        elif slot.zontype.num in (2, 7):
+            emit_s(emitter, OpCode.OP_FS, F3_FS.FSD, 3, src, slot.offset_global)
+        emitter.reg_manager.free_temp(reg)
+        return
+
+    if slot.reg is not None:
+        if isinstance(node.value, (IntLiteral, BoolLiteral)):
+            generate_literal_num(emitter, node.value.value, slot.reg)
+            return
+        if isinstance(node.value, FloatLiteral):
+            generate_literal_f(emitter, node.value.value, slot.reg)
+            return
+
+        reg = generate_expr(emitter, node.value, slot.zontype.num)
+        src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
+        if reg.regt == RegT.X:
+            emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, slot.reg, src, 0)
+        else:
+            emit_f_type(emitter, OpCode.OP_F, slot.reg, src, src, 0x00, F7.FSGNJ_D)
+        emitter.reg_manager.free_temp(reg)
+
+    else:
+        if isinstance(node.value, (IntLiteral, BoolLiteral)):
+            generate_literal_num(emitter, node.value.value, emitter.REG_SCRATCH_X)
+            emitter._write_result(slot, emitter.REG_SCRATCH_X)
+            return
+        if isinstance(node.value, FloatLiteral):
+            generate_literal_f(emitter, node.value.value, emitter.REG_SCRATCH_F)
+            emitter._write_result(slot, emitter.REG_SCRATCH_F)
+            return
+
+        reg = generate_expr(emitter, node.value, slot.zontype.num)
+        src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
+        emitter._write_result(slot, src)
+        emitter.reg_manager.free_temp(reg)
+
+
 def _alloc_var(emitter, regt: RegT, var_type: ZonType) -> ZonVar:
     """Allocate a ZonVar: prefer an s-register, spill to stack if none free."""
     from .bytecodescope import _SAVED_X, _SAVED_F
@@ -51,28 +151,30 @@ def _alloc_var(emitter, regt: RegT, var_type: ZonType) -> ZonVar:
     if free is not None:
         return ZonVar(free, regt, var_type)
 
-    frame        = emitter.offset_stack[-1]
-    fp_offset    = frame[0] - frame[1]
-    frame[0]    -= 8
+    frame = emitter.offset_stack[-1]
+    fp_offset = frame.spill_ptr - frame.bytes_needed
+    frame.spill_ptr -= 8
+    frame[0] = frame.spill_ptr
+
     return ZonVar(None, regt, var_type, offset_stack=fp_offset)
 
 
 def _emit_caller_save(emitter) -> tuple[list, list, int]:
     """Save all live temps to the stack before a call. Returns (x_regs, f_regs, offset)."""
     x_regs, f_regs = emitter.reg_manager.get_active_regs()
-    offset = emitter.offset_stack[-1][0]
+    offset = emitter.offset_stack[-1].spill_ptr
 
     for r in x_regs:
         emit_s(emitter, OpCode.OP_S,  F3_S.SD,  2, r, offset); offset -= 8
     for r in f_regs:
         emit_s(emitter, OpCode.OP_FS, F3_FS.FSD, 2, r, offset); offset -= 8
 
-    return x_regs, f_regs, emitter.offset_stack[-1][0]
+    return x_regs, f_regs, emitter.offset_stack[-1].spill_ptr
 
 
 def _emit_caller_restore(emitter, x_regs: list, f_regs: list) -> None:
     """Restore temps saved by _emit_caller_save."""
-    offset = emitter.offset_stack[-1][0]
+    offset = emitter.offset_stack[-1].spill_ptr
     for r in x_regs:
         emit_i_type(emitter, OpCode.L,  F3_L.LD,  r, 2, offset); offset -= 8
     for r in f_regs:
@@ -147,6 +249,23 @@ def generate_stmt(emitter, node) -> None:
         case DeclarationStmt():
             if emitter.symbol_table.exists_here(node.name):
                 return
+            
+            if node.type.size is not None:
+                frame       = emitter.offset_stack[-1]
+                total_bytes = node.type.size.value * 8  # por ahora todo 8 bytes
+                
+                frame.array_ptr -= total_bytes
+                fp_offset = frame.array_ptr - frame.bytes_needed
+                
+                var = ZonVar(None, RegT.X, node.type, offset_stack=fp_offset)
+                emitter.symbol_table._scopes[-1][node.name] = var
+
+                emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 10, 8, fp_offset)
+                emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 11, 0, total_bytes)
+                emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -200)
+                emit_ecall(emitter)
+                return
+
             is_float = node.type.num in (2, 7)
             regt     = RegT.F if is_float else RegT.X
             var      = _alloc_var(emitter, regt, node.type)
@@ -154,48 +273,11 @@ def generate_stmt(emitter, node) -> None:
 
         # --------------------------------------------------------------
         case AssignmentStmt():
-            slot = emitter.symbol_table.resolve(node.name)
-
-            if slot.is_global:
-                reg = generate_expr(emitter, node.value, slot.zontype.num)
-                src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
-                if slot.zontype.num in (1, 3, 4, 6):
-                    emit_s(emitter, OpCode.OP_S,  F3_S.SD,   3, src, slot.offset_global)
-                elif slot.zontype.num in (2, 7):
-                    emit_s(emitter, OpCode.OP_FS, F3_FS.FSD, 3, src, slot.offset_global)
-                emitter.reg_manager.free_temp(reg)
-                return
-
-            if slot.reg is not None:
-                if isinstance(node.value, (IntLiteral, BoolLiteral)):
-                    generate_literal_num(emitter, node.value.value, slot.reg)
-                    return
-                if isinstance(node.value, FloatLiteral):
-                    generate_literal_f(emitter, node.value.value, slot.reg)
-                    return
-
-                reg = generate_expr(emitter, node.value, slot.zontype.num)
-                src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
-                if reg.regt == RegT.X:
-                    emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, slot.reg, src, 0)
-                else:
-                    emit_f_type(emitter, OpCode.OP_F, slot.reg, src, src, 0x00, F7.FSGNJ_D)
-                emitter.reg_manager.free_temp(reg)
-
+            if isinstance(node.target, IndexExpr):
+                _emit_array_assignment(emitter, node)
+            
             else:
-                if isinstance(node.value, (IntLiteral, BoolLiteral)):
-                    generate_literal_num(emitter, node.value.value, emitter.REG_SCRATCH_X)
-                    emitter._write_result(slot, emitter.REG_SCRATCH_X)
-                    return
-                if isinstance(node.value, FloatLiteral):
-                    generate_literal_f(emitter, node.value.value, emitter.REG_SCRATCH_F)
-                    emitter._write_result(slot, emitter.REG_SCRATCH_F)
-                    return
-
-                reg = generate_expr(emitter, node.value, slot.zontype.num)
-                src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
-                emitter._write_result(slot, src)
-                emitter.reg_manager.free_temp(reg)
+                _emit_assignment(emitter, node)
 
         # --------------------------------------------------------------
         case InitializationStmt():
@@ -257,11 +339,32 @@ def generate_stmt(emitter, node) -> None:
                 emit_ecall_store(emitter, node)
 
             else:
-                if node.params is not None:
-                    _emit_call_args(emitter, node.params)
-
                 x_regs, f_regs, _ = _emit_caller_save(emitter)
+
+                evaluated_args = []
+
+                if node.params is not None:
+                    for param in node.params:
+                        reg = generate_expr(emitter, param)
+                        src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
+                        evaluated_args.append((src, reg))
+
+                int_arg = 10
+                float_arg = 10
+
+                for src, reg in evaluated_args:
+                    if reg.regt == RegT.X:
+                        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, int_arg, src, 0)
+                        int_arg += 1
+
+                    else:
+                        emit_f_type(emitter, OpCode.OP_F, float_arg, src, src, 0x0, F7.FSGNJ_D)
+                        float_arg += 1
+                    
+                    emitter.reg_manager.free_temp(reg)
+
                 emit_jump(emitter, emitter.functions[node.name][0], rd=1)
+
                 _emit_caller_restore(emitter, x_regs, f_regs)
 
         # --------------------------------------------------------------

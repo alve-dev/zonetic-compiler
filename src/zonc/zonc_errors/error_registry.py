@@ -598,16 +598,16 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
     ErrorCode.E2031 : ErrorDefinition(
       error_code=ErrorCode.E2031,
       severity=Severity.ERROR,
-      message="Expected `,` or `]` after field assign, but found `{token}` instead.",
+      message="Expected `,` or `)` after field assign, but found `{token}` instead.",
       note="""
       In Zonetic, field assignments in a constructor must be separated 
       by `,` (or a new line) and the entire block must be closed 
-      with `]`. The compiler found something else that doesn't 
+      with `)`. The compiler found something else that doesn't 
       belong in the object's box.""",
       zonny="""
       [ ~_~] <("I just finished an assignment and then `{token}` showed up 
                out of nowhere. Use `,` to add another field 
-               or `]` to close the constructor!")"""
+               or `)` to close the constructor!")"""
     ),
     
     ErrorCode.E2032 : ErrorDefinition(
@@ -647,6 +647,20 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
       zonny="""
       [ >_<] <("Ahhh! You're hurting my parser! A cast without parentheses is like a robot without bolts — it falls apart. 
                Put the value inside `(` and `)`. Please. For my sanity.")"""
+    ),
+
+    ErrorCode.E2035 : ErrorDefinition(
+      error_code=ErrorCode.E2035,
+      severity=Severity.ERROR,
+      message="I found an opening `[`, but you never closed the bracket.",
+      note="""
+      In Zonetic, square brackets `[ ]` must always be balanced. Every 
+      opening bracket `[` requires a matching closing bracket `]` to 
+      properly delimit the boundaries of the expression inside.""",
+      zonny="""
+      [ >_<] <("You left the gate open! A `[` without its matching `]` 
+               leaves this syntax block incomplete. Put a `]` to close 
+               the deal before my parser gets lost in an endless hallway!")"""
     ),
         
     ErrorCode.E3001 : ErrorDefinition(
@@ -1390,34 +1404,34 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
         [ o_o] <("You can't initialize a variable with a whole block. 
                  Move that code inside `main()` and assign the result normally.")"""
     ),
-        
-    ErrorCode.E4001 : ErrorDefinition(
-      error_code=ErrorCode.E4001,
+
+    ErrorCode.E3052 : ErrorDefinition(
+      error_code=ErrorCode.E3052,
       severity=Severity.ERROR,
-      message="Division by zero is not allowed — `{operator}` received zero as the right operand.",
+      message="Type `{type}` cannot be indexed.",
       note="""
-      In Zonetic, dividing by zero or using zero as the modulo divisor is undefined. 
-      This should have been caught earlier — but the value of the divisor 
-      was only known at runtime.""",
+      In Zonetic, the index operator `[ ]` can only be applied to types 
+      that represent collections of data, such as arrays. You cannot 
+      use an index on scalar types or structures that do not support 
+      subscripting.""",
       zonny="""
-      [ x_x] <("DIVISION BY ZERO. I'm not okay. 
-               How did this get past me? The right side of '{operator}' 
-               is zero and I absolutely cannot work with that. 
-               Make sure your divisor is never zero before operating.")"""
+      [ o_0] <("Whoa! You're trying to slice open `{var_name}`, but it's a `{type}`! 
+               You can't look inside it with `[ ]` because it isn't an array. 
+               Check your variable type or remove the brackets.")"""
     ),
-    
-    ErrorCode.E4002 : ErrorDefinition(
-      error_code=ErrorCode.E4002,
+
+    ErrorCode.E3053 : ErrorDefinition(
+      error_code=ErrorCode.E3053,
       severity=Severity.ERROR,
-      message="Stack overflow — maximum recursion depth of {limit} exceeded.",
+      message="Array index must be an integer type, but found `{type}`.",
       note="""
-      In Zonetic, the call stack has a default limit of {limit} to prevent infinite recursion. 
-      If this limit was reached, a base case is likely missing or unreachable.
-      The limit can be increased with --max-depth if deeper recursion is needed.""",
+      In Zonetic, memory indexing requires an exact integer value to 
+      calculate the element's offset. You cannot use floating-point numbers, 
+      booleans, strings, or other non-integer types as indices.""",
       zonny="""
-      [ x_x] <("I just kept going and going and I ran out of stack. 
-               Add a base case so it knows when to stop — 
-               or raise --max-depth if you're sure 200 isn't enough.")"""
+      [ >_<] <("Hey! You're trying to use a `{type}` as a map coordinate! 
+               Memory offsets don't work with fractions or text. 
+               Give me a proper whole number inside those brackets!")"""
     ),
     
     ErrorCode.E5001 : ErrorDefinition(
@@ -1490,6 +1504,48 @@ ERROR_REGISTRY: dict[ErrorCode, ErrorDefinition] = {
                I can't track a number that big without 
                losing my mind and just calling it `{inf}`. 
                Check your exponents!")"""
+    ),
+    
+    ErrorCode.E5006 : ErrorDefinition(
+      error_code=ErrorCode.E5006,
+      severity=Severity.ERROR,
+      message="Array size must be a compile-time constant integer.",
+      note="""
+      In Zonetic, standard arrays have a fixed size that must be known at 
+      compile time so the compiler can allocate the exact memory block. 
+      You must use a literal integer or an immutable variable (constant).""",
+      zonny="""
+      [ >_<] <("I need to know exactly how much space to reserve! 
+                Give me a fixed integer literal or an immutable variable,
+                or I won't know how big to build this block!")"""
+    ),
+
+    ErrorCode.E5007 : ErrorDefinition(
+      error_code=ErrorCode.E5007,
+      severity=Severity.ERROR,
+      message="Array index `{index}` is out of bounds for size {size}.",
+      note="""
+      In Zonetic, array indices are 0-indexed and must be strictly less than 
+      the declared size of the array. Accessing an index equal to or greater 
+      than the size attempts to read unallocated memory.""",
+      zonny="""
+      [ >_<] <("Whoa, hold your horses! You're trying to reach index `{index}`, 
+               but this array only goes up to {max_index}! 
+               Don't go driving into unallocated memory space!")"""
+    ),
+    
+    ErrorCode.E5008 : ErrorDefinition(
+      error_code=ErrorCode.E5008,
+      severity=Severity.ERROR,
+      message="Array index `{index}` cannot be negative.",
+      note="""
+      In Zonetic, memory offsets must always move forward. Negative indices 
+      are invalid because they would attempt to read memory before the 
+      start of the array.""",
+      zonny="""
+      [ ~_~] <("Index `{index}`? Go home Python, you're drunk! 
+               We don't do negative indexing magic here. 
+               In Zonetic, memory coordinates start at 0 and only go up!")"""
     ),
     
     ErrorCode.W5001 : ErrorDefinition(

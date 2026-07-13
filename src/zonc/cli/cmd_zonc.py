@@ -66,7 +66,7 @@ def _run_pipeline(source: str, filename: str, cmd: str, output_path: str = None)
 
     if cmd == "token":
         print_tokens(tokens._list)
-        return True
+        return False
 
     # -- parse --
     root = Parser(tokens, diagnostic, file_map).parse_program(filename)
@@ -77,7 +77,7 @@ def _run_pipeline(source: str, filename: str, cmd: str, output_path: str = None)
 
     if cmd == "ast":
         print_ast(root)
-        return True
+        return False
 
     # -- semantic --
     Semantic(diagnostic, file_map).analyze(root)
@@ -97,7 +97,7 @@ def _run_pipeline(source: str, filename: str, cmd: str, output_path: str = None)
 
     if cmd == "asto":
         print_ast(root)
-        return True
+        return False
 
     # -- emit --
     # save() generates and writes the .zbc file in one shot
@@ -143,8 +143,8 @@ def cmd_compile(path: str = None, source: str = None, output: str = None, cmd: s
         filename = "repl"
         out_path = output or "out.zbc"
 
-    _run_pipeline(source, filename, cmd, output_path=out_path)
-    if out_path:
+    success_compile = _run_pipeline(source, filename, cmd, output_path=out_path)
+    if out_path and success_compile:
         print(f"[zon info]: compiled to {out_path}")
 
 

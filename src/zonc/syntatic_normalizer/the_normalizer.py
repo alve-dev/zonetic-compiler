@@ -185,6 +185,7 @@ class Normalizer:
             if kind == TokenType.NEWLINE:
                 if depth == 0:
                     mode_locked, semicolon_mode = self._handle_newline(mode_locked, semicolon_mode)
+                
                 else:
                     # inside parens/brackets — newlines are just whitespace
                     self._tokens._del(self._pos)

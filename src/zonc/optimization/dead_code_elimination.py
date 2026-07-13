@@ -74,10 +74,14 @@ class DeadCodeElimination:
         """Process an assignment to an immutable variable.
         Returns the change in removed count (0 or -1).
         """
-        if stmt.mutability:
+        is_array = isinstance(stmt.target, IndexExpr)
+        name = stmt.target.name if is_array else stmt.target
+        symbol = scope.get(name)
+
+        if symbol.mutability:
             return 0
 
-        symbol = scope.get(stmt.name)
+        
         if symbol is None or symbol.mutability:
             return 0
 

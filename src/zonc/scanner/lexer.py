@@ -256,9 +256,19 @@ class Lexer:
             digits.append('.')
             self._advance(1)
 
-            while not self._is_end() and self._peek(0).isdigit():
+            while not self._is_end() and (self._peek(0).isdigit() or self._peek(0) == '_'):
                 digits.append(self._peek(0))
                 self._advance(1)
+
+                if digits[-1] == '_':
+                    while not self._is_end() and (self._peek(0).isdigit() or self._peek(0) == '_' or self._peek(0) == '.'):
+                        self._advance(1)
+                    span = self._span_from(start)
+                    self._diagnostic.emit(
+                        ErrorCode.E0008, None, [span],
+                        [(span, "'_' separators are not allowed in float literals")],
+                    )
+                    return
 
             # second dot is an error
             if self._peek(0) == '.' and self._peek(1).isdigit():
@@ -333,16 +343,12 @@ class Lexer:
         """Validate '_' thousand separators. Returns True if there is an error."""
         span = self._span_from(start)
 
-        # no separators allowed in float or exponent parts
-        if is_float:
-            self._diagnostic.emit(
-                ErrorCode.E0008, None, [span],
-                [(span, "'_' separators are not allowed in float literals")],
-            )
-            return True
-
         # must be exactly groups of 3 digits after the first group
         # e.g. 1_000, 1_000_000 are valid; 1_00, 1_0000 are not
+        index = raw.find('.')
+        if index != -1:
+            raw = raw[:index]
+
         parts = raw.split('_')
 
         # first group can be 1-3 digits, rest must be exactly 3

@@ -19,7 +19,6 @@ _UNKNOWN_TYPE = ZonType(0, "UNKNOWN")
 
 
 class RegisterManager:
-
     def __init__(self, offset_stack: list) -> None:
         self._temps  = [5, 6, 7, 28, 29]
         self._ftemps = [0, 1, 2, 3, 4, 5, 6, 7, 28, 29]
@@ -95,9 +94,14 @@ class RegisterManager:
         if self._recycled_spills:
             return self._recycled_spills.pop()
 
-        frame        = self._offset_stack[-1]
-        bytes_needed = frame[1]
-        current_ptr  = frame[0]
+        frame = self._offset_stack[-1]
+        
+        bytes_needed = frame.bytes_needed
+        current_ptr  = frame.spill_ptr
+        
         fp_offset    = -(bytes_needed - current_ptr)
-        frame[0]    -= 8
+        
+        frame.spill_ptr -= 8
+        frame[0]         = frame.spill_ptr
+        
         return fp_offset

@@ -12,10 +12,8 @@ from zonc.location_file import Span
 from .semantic_types import leven_hint, err_span
 import copy
 
-
 class TypeInferenceMixin:
-
-    # ------------------------------------------------------------------
+    # -------------------------------------------------------------------
     # Type compatibility
     # ------------------------------------------------------------------
 
@@ -194,6 +192,41 @@ class TypeInferenceMixin:
             if symbol.scope_object is not None:
                 return (symbol.zontype, copy.deepcopy(symbol.scope_object))
             return symbol.zontype
+        
+        # -- array index access --
+        if isinstance(expr, IndexExpr):
+            symbol = scope.get(expr.name)
+            if symbol is None:
+                hint = leven_hint(expr.name, scope.collect("var"))
+                self._diag.emit(ErrorCode.E3001, {"name": expr.name}, [expr.span],
+                    [(expr.span, f"does not exist in this scope{hint}")])
+                return e
+            
+            # Check if the symbol is actually an array type (e.g., type num 8)
+            if not symbol.zontype.num in self.ARRAY_FAMILY:
+                self._diag.emit(
+                    ErrorCode.E3052, {"var_name": expr.name, "type": symbol.zontype.name}, [expr.span],
+                    [(expr.span, f"It is not an indexable symbol.")]
+                )
+                return e
+            
+            # Infer the index expression type
+            idx_type = self._infer(expr.idx_expr, scope, name=name)
+            if isinstance(idx_type, tuple): 
+                idx_type = idx_type[0]
+                
+            # Validate that the index evaluates to an integer family (1: int64, 6: int32)
+            if idx_type.num not in {1, 6}:
+                self._diag.emit(
+                    ErrorCode.E3053, {"type": idx_type.name}, [expr.idx_expr.span],
+                    [(expr.idx_expr.span, f"it is not an integer")]
+                )
+                return e
+                
+            # Retrieve the underlying scalar element type (e.g., 8 -> 1 for int64)
+            element_num, element_name = symbol.zontype.get_array_element_type()
+            return ZonType(element_num, element_name)
+
 
         # -- field access --
         if isinstance(expr, FieldExpr):

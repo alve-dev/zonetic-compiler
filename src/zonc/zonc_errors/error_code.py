@@ -57,6 +57,7 @@ class ErrorCode(Enum):
     E2032 = auto()
     E2033 = auto()
     E2034 = auto()
+    E2035 = auto()
     
     # Parser Warnings
     W2001 = auto()
@@ -113,8 +114,8 @@ class ErrorCode(Enum):
     E3049 = auto()
     E3050 = auto()
     E3051 = auto()
-    
-    
+    E3052 = auto()
+    E3053 = auto()
     
     
     # Semantics Warnings
@@ -125,10 +126,6 @@ class ErrorCode(Enum):
     W3005 = auto()
     W3006 = auto()
     
-    # Runtime Tree-Walker Errors
-    E4001 = auto()
-    E4002 = auto()
-    
     # Optimization Errors
     E5001 = auto()
     E5002 = auto()
@@ -136,6 +133,8 @@ class ErrorCode(Enum):
     E5004 = auto()
     E5005 = auto()
     E5006 = auto()
+    E5007 = auto()
+    E5008 = auto()
     
     W5001 = auto()
     
@@ -147,4 +146,3 @@ class ErrorCode(Enum):
 # 2 Errors son del Normalizer
 # 33 Errors son del Parser y 1 warning son del parser
 # 46 Errors son de Semantic y 6 Warnings son del Semantic
-# 2 Error de Runtime 

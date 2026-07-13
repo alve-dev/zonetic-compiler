@@ -81,7 +81,7 @@ def _emit_float_r(emitter, f7, rm, left: ZonVar, right: ZonVar) -> ZonVar:
 
 def _emit_caller_save(emitter):
     x_regs, f_regs = emitter.reg_manager.get_active_regs()
-    offset = emitter.offset_stack[-1][0]
+    offset = emitter.offset_stack[-1].spill_ptr
     for r in x_regs:
         emit_s(emitter, OpCode.OP_S,  F3_S.SD,  2, r, offset); offset -= 8
     for r in f_regs:
@@ -90,7 +90,7 @@ def _emit_caller_save(emitter):
 
 
 def _emit_caller_restore(emitter, x_regs, f_regs):
-    offset = emitter.offset_stack[-1][0]
+    offset = emitter.offset_stack[-1].spill_ptr
     for r in x_regs:
         emit_i_type(emitter, OpCode.L,  F3_L.LD,  r, 2, offset); offset -= 8
     for r in f_regs:
@@ -173,8 +173,8 @@ def generate_expr(emitter, node, target_type=None) -> ZonVar:
                 return ZonVar(src, RegT.F, var.zontype)
 
         # ----------------------------------------------------------
-        #case IndexExpr():
-        #    return _gen_index(emitter, node)
+        case IndexExpr():
+            return _emit_array_index(emitter, node)
 
         # ----------------------------------------------------------
         case BlockExpr():
@@ -488,6 +488,67 @@ def _gen_unary(emitter, node: UnaryExpr, is_w: bool) -> ZonVar:
 # ------------------------------------------------------------------
 # Index expression
 # ------------------------------------------------------------------
+def _emit_array_index(emitter, node: IndexExpr) -> ZonVar:
+    """Handles array indexing (e.g., loading value from arr[9]).
+    For now, it assumes the index is a literal integer for testing purposes.
+    """
+    array_name = node.name
+    var_info = emitter.symbol_table.resolve(array_name)
+
+    if isinstance(node, IntLiteral):
+        literal_index = node.idx_expr.value
+        byte_offset = literal_index * 8
+        target_offset = var_info.offset_stack + byte_offset
+
+        element_type_num = var_info.zontype.get_array_element_type()
+        reg_type = RegT.F if element_type_num in {2, 7} else RegT.X
+
+        dest_reg = emitter.reg_manager.alloc_temp() if reg_type == RegT.X else emitter.reg_manager.alloc_ftemp()
+        emitter._write_result(dest_reg, _scratch(emitter, reg_type))
+
+        if reg_type == RegT.X:
+            emit_i_type(emitter, OpCode.L, F3_L.LD, dest_reg, 2, target_offset)
+
+        else:
+            emit_f_type(emitter, OpCode.FL, F3_FL.FLD, dest_reg, 2, target_offset)
+
+        return dest_reg
+
+    else:
+        idx_reg = generate_expr(emitter, node.idx_expr)
+        idx_operand = emitter._read_operand(idx_reg, emitter.REG_SCRATCH_X)
+
+        scratch_size = 30 
+        
+        array_size = var_info.zontype.size.value
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, scratch_size, 0, array_size)
+        valid_label = emitter.label_manager.create()
+
+        emit_b_type(emitter, OpCode.OP_B, F3_B.BLTU, idx_operand, scratch_size, valid_label)
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, 17, 0, -900)
+        emit_ecall(emitter) 
+
+        emitter.label_manager.place_label(valid_label, emitter.get_pc())
+        scratch_addr = emitter.REG_SCRATCH_X
+
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.SLL_SLLI, scratch_addr, idx_operand, 3)
+        emit_r_type(emitter, OpCode.OP, F3_ALU.ADD_SUB, F7.STANDARD, scratch_addr, 2, scratch_addr)
+        emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, scratch_addr, scratch_addr, var_info.offset_stack)
+
+        element_type_num = var_info.zontype.get_array_element_type()
+        reg_type = RegT.F if element_type_num in {2, 7} else RegT.X
+
+        dest_reg = emitter.reg_manager.alloc_temp()
+        dest_operand = emitter._read_operand(dest_reg, _scratch(emitter, reg_type))
+
+        if reg_type == RegT.X:
+            emit_i_type(emitter, OpCode.L, F3_L.LD, dest_operand, scratch_addr, 0)
+
+        else:
+            emit_i_type(emitter, OpCode.FL, F3_FL.FLD, dest_operand, scratch_addr, 0)
+
+        emitter.reg_manager.free_temp(idx_reg)
+        return dest_reg
 
 """def _gen_index(emitter, node: IndexExpr) -> ZonVar:
     symbol = emitter.symbol_table.resolve(node.name)
@@ -586,36 +647,49 @@ def _gen_call(emitter, node: CallFunc) -> ZonVar:
         return emit_ecall_alloc_load(emitter, node, 0)
     if node.name == "load":
         return emit_ecall_alloc_load(emitter, node, 1)
+    
+    x_regs, f_regs = _emit_caller_save(emitter)
 
-    int_arg = float_arg = 10
+    evaluated_args = []
+    
     if node.params is not None:
         for param in node.params:
             reg = generate_expr(emitter, param)
             src = emitter._read_operand(reg, _scratch(emitter, reg.regt))
-            if reg.regt == RegT.X:
-                emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, int_arg, src, 0)
-                int_arg += 1
-            else:
-                emit_f_type(emitter, OpCode.OP_F, float_arg, src, src, 0x0, F7.FSGNJ_D)
-                float_arg += 1
-            emitter.reg_manager.free_temp(reg)
+            evaluated_args.append((src, reg))
 
-    x_regs, f_regs = _emit_caller_save(emitter)
+    int_arg = 10
+    float_arg = 10
+
+    for src, reg in evaluated_args:
+        if reg.regt == RegT.X:
+            emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, int_arg, src, 0)
+            int_arg += 1
+        else:
+            emit_f_type(emitter, OpCode.OP_F, float_arg, src, src, 0x0, F7.FSGNJ_D)
+            float_arg += 1
+        
+        emitter.reg_manager.free_temp(reg)
+
     emit_jump(emitter, emitter.functions[node.name][0], rd=1)
+
     _emit_caller_restore(emitter, x_regs, f_regs)
 
     return_type = emitter.functions[node.name][1]
+    
     if return_type.num in (1, 3, 4, 6):
         result, rd = _alloc_and_resolve(emitter, RegT.X)
         emit_i_type(emitter, OpCode.OP_IMM, F3_ALU.ADD_SUB, rd, 10, 0)
         emitter._write_result(result, rd)
         result.zontype = return_type
         return result
+        
     if return_type.num in (2, 7):
         result, rd = _alloc_and_resolve(emitter, RegT.F)
         emit_f_type(emitter, OpCode.OP_F, rd, 10, 10, 0x0, F7.FSGNJ_D)
         emitter._write_result(result, rd)
         return result
+
     return ZonVar(10, None, return_type)
 
 

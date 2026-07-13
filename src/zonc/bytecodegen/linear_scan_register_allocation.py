@@ -10,12 +10,13 @@ The results are consumed by the prologue/epilogue emitters in func_gen.py.
 
 How the frame size is calculated
 ---------------------------------
-  bytes_needed = (spilled_vars * 8) + (spilled_temps * 8) + 16 + extra
+  bytes_needed = (spilled_vars * 8) + (spilled_temps * 8) + 16 + array_bytes + caller_save_bytes
 
-  - spilled_vars:  integer/float variables that exceed the s-register budget
-  - spilled_temps: temporary registers that exceed the t-register budget
-  - 16:            always reserved for s0 (frame pointer) and ra (if has_call)
-  - extra:         stack space for arrays and caller-save slots around calls
+  - spilled_vars:       integer/float variables that exceed the s-register budget
+  - spilled_temps:      temporary registers that exceed the t-register budget
+  - 16:                 always reserved for s0 (frame pointer) and ra (if has_call)
+  - array_bytes:        stack space allocated explicitly for static arrays
+  - caller_save_bytes:  stack space reserved for saving live temporaries around function calls
 
 The result is rounded up to the next 16-byte boundary (ABI alignment).
 """
@@ -48,7 +49,10 @@ class LinearScanRegisterAllocation:
 
         self.has_call  = False
         self.used_heap = False
-        self.extra     = 0  # extra stack bytes: arrays + caller-save slots
+        
+        # Explicitly separated stack space metrics
+        self.array_bytes       = 0  # Space allocated for stack arrays
+        self.caller_save_bytes = 0  # Space needed to shield live temporaries across calls
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -66,6 +70,10 @@ class LinearScanRegisterAllocation:
             for param in params:
                 self._register_var(param.name, param.zontype.num)
 
+        # Pre-calculate explicit array allocations upfront
+        self.array_bytes = self._get_array_space(stmts)
+
+        # Walk the AST to simulate register pressure and identify function calls
         self._scan_list(stmts)
 
         # variables that don't fit in s-registers spill to the stack
@@ -77,7 +85,9 @@ class LinearScanRegisterAllocation:
         ftemp_spill = max(0, self._max_fregs - self._num_fregs)
 
         total_slots  = extra_ints + extra_floats + temp_spill + ftemp_spill
-        bytes_needed = total_slots * 8 + 16 + self.extra
+        
+        # Now calculating frame layout cleanly with separate properties
+        bytes_needed = (total_slots * 8) + 16 + self.array_bytes + self.caller_save_bytes
 
         # RISC-V ABI requires 16-byte stack alignment
         if bytes_needed % 16 != 0:
@@ -88,7 +98,7 @@ class LinearScanRegisterAllocation:
 
         return bytes_needed, self.has_call, (used_save_x, used_save_f), self.used_heap
 
-    def get_array_space(self, stmts: list) -> int:
+    def _get_array_space(self, stmts: list) -> int:
         """Return total bytes needed for stack arrays declared in stmts.
         Recurses into blocks, if forms, and while forms — but not FuncForms,
         which have their own frame.
@@ -100,19 +110,19 @@ class LinearScanRegisterAllocation:
                     total += 8 * stmt.type.size.value
 
             elif isinstance(stmt, WhileForm):
-                total += self.get_array_space(stmt.block_expr.stmts)
+                total += self._get_array_space(stmt.block_expr.stmts)
 
             elif isinstance(stmt, IfForm):
                 if stmt.if_branch:
-                    total += self.get_array_space(stmt.if_branch.block.stmts)
+                    total += self._get_array_space(stmt.if_branch.block.stmts)
                 if stmt.elif_branches:
                     for b in stmt.elif_branches:
-                        total += self.get_array_space(b.block.stmts)
+                        total += self._get_array_space(b.block.stmts)
                 if stmt.else_branch:
-                    total += self.get_array_space(stmt.else_branch.block.stmts)
+                    total += self._get_array_space(stmt.else_branch.block.stmts)
 
             elif isinstance(stmt, BlockExpr):
-                total += self.get_array_space(stmt.stmts)
+                total += self._get_array_space(stmt.stmts)
 
         return total
 
@@ -127,9 +137,10 @@ class LinearScanRegisterAllocation:
         self._max_fregs = 0
         self._seen_ints.clear()
         self._seen_floats.clear()
-        self.has_call  = False
-        self.used_heap = False
-        self.extra     = 0
+        self.has_call          = False
+        self.used_heap         = False
+        self.array_bytes       = 0
+        self.caller_save_bytes = 0
 
     # ------------------------------------------------------------------
     # Variable registration helper
@@ -189,11 +200,14 @@ class LinearScanRegisterAllocation:
                     self._register_var(node.decl_stmt.name, node.decl_stmt.type.num)
 
             case DeclarationStmt():
+                if node.type.size is not None:
+                    return
                 if node.name not in self._seen_ints and node.name not in self._seen_floats:
                     self._register_var(node.name, node.type.num)
 
             case AssignmentStmt():
                 self._scan_node(node.value)
+                if isinstance(node.target, IndexExpr): self._scan_node(node.target.idx_expr)
 
             case CastExpr():
                 self._scan_node(node.value)
@@ -205,6 +219,9 @@ class LinearScanRegisterAllocation:
             case BinaryExpr():
                 self._scan_binary(node)
 
+            case IndexExpr():
+                self._scan_node(node.idx_expr)
+
             case UnaryExpr():
                 self._scan_node(node.value)
                 if node.operator == Operator.NEG and isinstance(node.value, FloatLiteral):
@@ -214,15 +231,6 @@ class LinearScanRegisterAllocation:
 
             case CallFunc():
                 self._scan_call(node)
-
-            #case IndexExpr():
-            #    self._scan_node(node.index)
-            #    if not isinstance(node.index, IntLiteral):
-            #        # dynamic index: reg_i + reg_offset + reg_dir + reg_final
-            #        self._alloc_t(); self._alloc_t(); self._alloc_t()
-            #        self._free_t();  self._free_t();  self._free_t()
-            #    else:
-            #        self._alloc_t()
 
             case IfForm():
                 if node.if_branch:
@@ -314,8 +322,8 @@ class LinearScanRegisterAllocation:
 
         if node.name not in _ALL_BUILTINS:
             self.has_call = True
-            # reserve stack space for caller-save of currently live temps
-            self.extra += self._cur_regs * 8 + self._cur_fregs * 8
+            # Accumulate caller-save memory explicitly based on currently active temporaries
+            self.caller_save_bytes += (self._cur_regs * 8) + (self._cur_fregs * 8)
 
         if node.name in _HEAP_BUILTINS:
             self.used_heap = True

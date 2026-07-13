@@ -27,6 +27,7 @@ from .expr.field_expr import FieldExpr
 from .expr.construct_expr import ConstructExpr
 from .stmt.initialization_stmt import InitializationStmt
 from .expr.cast_expr import CastExpr
+from .expr.index_expr import IndexExpr
 
 __all__ = [
     "Node",
@@ -62,5 +63,6 @@ __all__ = [
     "AssignmentFieldStmt",
     "ConstructExpr",
     "InitializationStmt",
-    "CastExpr"
+    "CastExpr",
+    "IndexExpr"
 ]
