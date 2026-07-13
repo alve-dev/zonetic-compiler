@@ -2,11 +2,10 @@
 # Zonetic Installer — Windows Setup
 #
 # Default: sparse checkout — downloads only src/zonc/*, scripts/*
-# Complete: swap Clone-Zonc-Sparse for Clone-Zonc-Full in Main()
 #
 # Usage:
 #   .\install_windows.ps1
-#   irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_windows.ps1 | iex
+#   irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_windows.ps1 | iex
 # ==============================================================
 
 # ------------------------------------------------------------------
