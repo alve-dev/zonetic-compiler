@@ -287,10 +287,8 @@ function Main {
     New-Item -ItemType Directory -Path $ZoncDir  -Force | Out-Null
     New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 
-    # Clone repositories (choose sparse or full for compiler)
-    # Uncomment the one you prefer:
-    # Clone-Zonc-Full   "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
-    Clone-Zonc-Sparse "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
+    # Clone repositories (full for compiler)
+    Clone-Zonc-Full   "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
 
     Clone-Zonvm "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
 
