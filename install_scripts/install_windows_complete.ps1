@@ -1,11 +1,9 @@
 # ==============================================================
 # Zonetic Installer — Windows Setup (v2.2)
 #
-# Complete: swap Clone-Zonc-Sparse for Clone-Zonc-Full in Main()
-#
 # Usage:
 #   .\install_windows.ps1
-#   irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_windows.ps1 | iex
+#   irm https://raw.githubusercontent.com/alve-dev/zonetic-compiler/refs/heads/main/install_scripts/install_windows_complete.ps1 | iex
 # ==============================================================
 
 # ------------------------------------------------------------------
@@ -195,6 +193,8 @@ function Clone-Zonc-Full {
         Write-Info "Compiler already exists. Updating..."
         Push-Location $Dir
         try {
+            git init -q
+            git remote add origin $Url 2>/dev/null
             git pull origin main
             if ($LASTEXITCODE -ne 0) { throw "git pull failed." }
         } catch {
@@ -220,6 +220,8 @@ function Clone-Zonvm {
         Write-Info "VM already exists. Updating..."
         Push-Location $Dir
         try {
+            git init -q
+            git remote add origin $Url 2>/dev/null
             git pull origin main
             if ($LASTEXITCODE -ne 0) { throw "git pull failed." }
         } catch {
