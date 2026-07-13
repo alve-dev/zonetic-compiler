@@ -1,5 +1,5 @@
 # ==============================================================
-# Zonetic Installer — Windows Setup (v2.2)
+# Zonetic Installer — Windows Setup (v2.3)
 #
 # Usage:
 #   .\install_windows.ps1
@@ -17,11 +17,6 @@ $RESET  = "$([char]0x1B)[0m"
 
 # ------------------------------------------------------------------
 # Zonny faces
-#   NEUTRAL  [ o_o]  — working / info
-#   SUCCESS  [ ^_^]  — step completed
-#   DONE     [ ⌐■_■]b — everything finished
-#   ERROR    [ x_x]  — fatal error
-#   PROMPT   [ o_0]  — asking the user something
 # ------------------------------------------------------------------
 $FACE_NEUTRAL = "[ o_o]"
 $FACE_SUCCESS = "${GREEN}[ ^_^]${RESET}"
@@ -40,6 +35,21 @@ function Write-Prompt  { param([string]$Msg) { Write-Host "$FACE_PROMPT $Msg" -F
 function Write-Separator { Write-Host ""; Write-Host "------------------------------------------------"; Write-Host "" }
 
 # ------------------------------------------------------------------
+# Helper: read a y/n answer, retrying until valid input is given
+# ------------------------------------------------------------------
+function Ask-YN {
+    param([string]$Prompt)
+    while ($true) {
+        Write-Prompt "$Prompt (y/n) "
+        $answer = (Read-Host).ToLower()
+        if ($answer -eq "y" -or $answer -eq "n") {
+            return $answer
+        }
+        Write-Info "Please answer 'y' or 'n'."
+    }
+}
+
+# ------------------------------------------------------------------
 # Environment / PATH helpers
 # ------------------------------------------------------------------
 function Refresh-Env {
@@ -51,6 +61,10 @@ function Refresh-Env {
 
 function Add-To-UserPath {
     param([string]$PathToAdd)
+    if (-not (Test-Path $PathToAdd)) {
+        Write-Info "Path '$PathToAdd' does not exist. Skipping."
+        return $false
+    }
     $current = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($current -notlike "*$PathToAdd*") {
         try {
@@ -67,178 +81,117 @@ function Add-To-UserPath {
     }
 }
 
-function Add-To-SystemPath {
-    param([string]$PathToAdd)
-    # Check if running as admin (required for system PATH)
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-    if (-not $isAdmin) {
-        Write-Info "System PATH modification requires administrator privileges. Skipping system PATH."
-        return $false
-    }
-    $current = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if ($current -notlike "*$PathToAdd*") {
-        try {
-            [Environment]::SetEnvironmentVariable("Path", "$current;$PathToAdd", "Machine")
-            Refresh-Env
-            Write-Success "System PATH updated."
-            return $true
-        } catch {
-            Write-Err "Failed to update system PATH: $_"
-        }
-    }
-    return $false
-}
-
 # ------------------------------------------------------------------
 # Dependency management
 # ------------------------------------------------------------------
-function Find-GCC {
-    # Common locations for MSYS2 / MinGW
-    $candidates = @(
-        "C:\msys64\ucrt64\bin",
-        "C:\msys64\mingw64\bin",
-        "C:\msys64\clang64\bin",
-        "C:\Program Files\mingw-w64\*\mingw64\bin"
-    )
-    foreach ($p in $candidates) {
-        if (Test-Path "$p\g++.exe") { return $p }
-    }
-    # Fallback: search in Program Files
-    $found = Get-ChildItem -Path "C:\Program Files" -Filter "g++.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) { return $found.DirectoryName }
-    return $null
-}
-
 function Require-Tool {
     param(
         [string]$Cmd,
         [string]$PackageId,
-        [string]$InstallHint = ""  # Optional extra hint
+        [string]$InstallHint = ""
     )
 
-    # Special case for g++ because we need to check both command and existence
-    if ($Cmd -eq "g++") {
-        $found = (Get-Command "g++" -ErrorAction SilentlyContinue) -ne $null
-        if (-not $found) {
-            # Try to find it in common paths even if not in PATH
-            $gccPath = Find-GCC
-            if ($gccPath) {
-                Add-To-UserPath -PathToAdd $gccPath
-                Refresh-Env
-                $found = (Get-Command "g++" -ErrorAction SilentlyContinue) -ne $null
-            }
-        }
-        if ($found) {
-            Write-Success "g++ is ready."
-            return
-        }
-    } else {
-        $found = (Get-Command $Cmd -ErrorAction SilentlyContinue) -ne $null
-        if ($found) {
-            Write-Success "$Cmd is ready."
-            return
-        }
+    # Check if command exists
+    $found = (Get-Command $Cmd -ErrorAction SilentlyContinue) -ne $null
+    if ($found) {
+        Write-Success "$Cmd is ready."
+        return
     }
 
     Write-Info "'$Cmd' not found."
     if ($InstallHint) { Write-Info "Hint: $InstallHint" }
 
-    while ($true) {
-        Write-Prompt "Install it now? (y/n) "
-        $answer = (Read-Host).ToLower()
+    # Check if winget is available
+    $winget = (Get-Command "winget" -ErrorAction SilentlyContinue) -ne $null
+    if (-not $winget) {
+        Write-Info "Winget is not available. Please install '$Cmd' manually and add it to your PATH."
+        Write-Err "Aborting installation."
+    }
 
-        if ($answer -eq "y") {
-            Write-Info "Installing $Cmd via winget..."
-            try {
-                winget install --exact --id $PackageId --accept-source-agreements --accept-package-agreements
-                if ($LASTEXITCODE -ne 0) { throw "winget installation failed." }
-
-                # After installation, refresh and verify
-                Refresh-Env
-                if ($Cmd -eq "g++") {
-                    # For MSYS2, we need to find the bin folder and add it to PATH
-                    $gccPath = Find-GCC
-                    if ($gccPath) {
-                        Add-To-UserPath -PathToAdd $gccPath
-                        Refresh-Env
-                        Write-Success "g++ linked at: $gccPath"
-                    } else {
-                        Write-Info "Could not locate g++ automatically. Please add the MSYS2 bin directory to your PATH manually."
-                        Write-Info "Typically: C:\msys64\ucrt64\bin or C:\msys64\mingw64\bin"
-                    }
-                }
-                # Verify again
-                $found = if ($Cmd -eq "g++") { (Get-Command "g++" -ErrorAction SilentlyContinue) -ne $null } else { (Get-Command $Cmd -ErrorAction SilentlyContinue) -ne $null }
-                if ($found) {
-                    Write-Success "$Cmd installed and available."
-                    return
-                } else {
-                    Write-Err "Installation completed but $Cmd is still not available. Please check your PATH."
-                }
-            } catch {
-                Write-Err "Failed to install $Cmd : $_"
+    $answer = Ask-YN "'$Cmd' is missing. Install it now?"
+    if ($answer -eq "y") {
+        Write-Info "Installing $Cmd via winget..."
+        try {
+            winget install --exact --id $PackageId --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0) { throw "winget installation failed." }
+            Refresh-Env
+            # Verify again
+            $found = (Get-Command $Cmd -ErrorAction SilentlyContinue) -ne $null
+            if ($found) {
+                Write-Success "$Cmd installed and available."
+                return
+            } else {
+                Write-Err "Installation completed but $Cmd is still not available. Please check your PATH."
             }
-        } elseif ($answer -eq "n") {
-            Write-Err "'$Cmd' is required. Aborting."
+        } catch {
+            Write-Err "Failed to install $Cmd : $_"
+        }
+    } else {
+        Write-Err "'$Cmd' is required. Aborting."
+    }
+}
+
+# ------------------------------------------------------------------
+# Handle existing installation directory
+# ------------------------------------------------------------------
+function Check-InstallDir {
+    param([string]$Dir)
+    if (-not (Test-Path $Dir)) {
+        return $true  # Directory doesn't exist, proceed
+    }
+    $items = Get-ChildItem -Path $Dir -Force -ErrorAction SilentlyContinue
+    if ($items.Count -gt 0) {
+        Write-Info "$Dir is not empty ($($items.Count) items)."
+        $answer = Ask-YN "Overwrite its contents?"
+        if ($answer -eq "y") {
+            Write-Info "Cleaning directory..."
+            Remove-Item -Recurse -Force $Dir -ErrorAction SilentlyContinue
+            return $true
+        } else {
+            Write-Err "Installation cancelled."
         }
     }
+    return $true
 }
 
 # ------------------------------------------------------------------
 # Repository cloning functions
 # ------------------------------------------------------------------
-function Clone-Zonc-Full {
-    param([string]$Url, [string]$Dir)
+function Clone-Or-Update {
+    param([string]$Url, [string]$Dir, [string]$Name)
     if (Test-Path $Dir) {
-        Write-Info "Compiler already exists. Updating..."
+        Write-Info "$Name already exists. Updating..."
         Push-Location $Dir
         try {
-            git init -q
-            git remote add origin $Url 2>/dev/null
+            # Check if it's a git repo
+            $isRepo = Test-Path (Join-Path $Dir ".git")
+            if (-not $isRepo) {
+                Write-Info "Directory exists but is not a git repository. Re-cloning..."
+                Pop-Location
+                Remove-Item -Recurse -Force $Dir
+                git clone $Url $Dir
+                if ($LASTEXITCODE -ne 0) { throw "git clone failed." }
+                Write-Success "$Name downloaded."
+                return
+            }
             git pull origin main
             if ($LASTEXITCODE -ne 0) { throw "git pull failed." }
         } catch {
-            Write-Err "Failed to update compiler: $_"
-        } finally { Pop-Location }
-        Write-Success "Compiler updated."
-        return
-    }
-
-    Write-Info "Cloning full compiler from $Url ..."
-    try {
-        git clone $Url $Dir
-        if ($LASTEXITCODE -ne 0) { throw "git clone failed." }
-    } catch {
-        Write-Err "Failed to clone compiler repository: $_"
-    }
-    Write-Success "Compiler downloaded."
-}
-
-function Clone-Zonvm {
-    param([string]$Url, [string]$Dir)
-    if (Test-Path $Dir) {
-        Write-Info "VM already exists. Updating..."
-        Push-Location $Dir
+            Write-Err "Failed to update $Name : $_"
+        } finally {
+            Pop-Location
+        }
+        Write-Success "$Name updated."
+    } else {
+        Write-Info "Cloning $Name from $Url ..."
         try {
-            git init -q
-            git remote add origin $Url 2>/dev/null
-            git pull origin main
-            if ($LASTEXITCODE -ne 0) { throw "git pull failed." }
+            git clone $Url $Dir
+            if ($LASTEXITCODE -ne 0) { throw "git clone failed." }
         } catch {
-            Write-Err "Failed to update VM: $_"
-        } finally { Pop-Location }
-        Write-Success "VM updated."
-        return
+            Write-Err "Failed to clone $Name : $_"
+        }
+        Write-Success "$Name downloaded."
     }
-
-    Write-Info "Cloning VM from $Url ..."
-    try {
-        git clone $Url $Dir
-        if ($LASTEXITCODE -ne 0) { throw "git clone failed." }
-    } catch {
-        Write-Err "Failed to clone VM repository: $_"
-    }
-    Write-Success "VM downloaded."
 }
 
 # ------------------------------------------------------------------
@@ -246,14 +199,14 @@ function Clone-Zonvm {
 # ------------------------------------------------------------------
 function Main {
     Write-Separator
-    Write-Host "${CYAN}Zonetic Installer v2.2 — Windows${RESET}" -ForegroundColor Cyan
+    Write-Host "${CYAN}Zonetic Installer v2.3 — Windows${RESET}" -ForegroundColor Cyan
     Write-Separator
 
-    # Check if running as admin for system PATH updates
+    # Check if running as admin for system PATH updates (not required, but we'll note)
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
     if (-not $isAdmin) {
-        Write-Info "Not running as Administrator. System PATH modifications will be skipped."
-        Write-Info "If you want the installer to add to System PATH, run as Administrator."
+        Write-Info "Not running as Administrator. We will update only the User PATH."
+        Write-Info "If you want to add to System PATH, run as Administrator."
     }
 
     Write-Info "Checking dependencies..."
@@ -265,32 +218,16 @@ function Main {
     $ZoncDir    = Join-Path $InstallDir ".zonc"
     $ZonvmDir   = Join-Path $InstallDir ".zonvm"
 
-    if (Test-Path $InstallDir) {
-        $count = (Get-ChildItem -Path $InstallDir -Force -ErrorAction SilentlyContinue).Count
-        if ($count -gt 0) {
-            Write-Info "$InstallDir is not empty ($count items)."
-            while ($true) {
-                Write-Prompt "Overwrite its contents? (y/n) "
-                $answer = (Read-Host).ToLower()
-                if ($answer -eq "y") {
-                    Write-Info "Cleaning directory..."
-                    Remove-Item -Recurse -Force $InstallDir -ErrorAction SilentlyContinue | Out-Null
-                    break
-                } elseif ($answer -eq "n") {
-                    Write-Err "Installation cancelled."
-                }
-            }
-        }
-    }
+    # Check and clean if needed
+    Check-InstallDir -Dir $InstallDir
 
     # Create directories
     New-Item -ItemType Directory -Path $ZoncDir  -Force | Out-Null
     New-Item -ItemType Directory -Path $ZonvmDir -Force | Out-Null
 
-    # Clone repositories (full for compiler)
-    Clone-Zonc-Full   "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" $ZoncDir
-
-    Clone-Zonvm "https://github.com/alve-dev/zonetic-vm.git" $ZonvmDir
+    # Clone repositories
+    Clone-Or-Update -Url "https://github.com/alve-dev/zonetic-lang-tree-walker-version.git" -Dir $ZoncDir -Name "Compiler"
+    Clone-Or-Update -Url "https://github.com/alve-dev/zonetic-vm.git" -Dir $ZonvmDir -Name "VM"
 
     # Add scripts folder to user PATH
     $scriptsPath = Join-Path $ZoncDir "scripts"
